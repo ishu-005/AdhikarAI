@@ -1,6 +1,6 @@
 {
   "buildCommand": "echo 'Static build complete'",
-  "outputDirectory": "./",
+  "outputDirectory": "frontend/",
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -12,7 +12,7 @@
     },
     {
       "source": "/:path*",
-      "destination": "/index.html"
+      "destination": "/templates/index.html"
     }
   ],
   "env": {
@@ -24,3 +24,4 @@
     }
   }
 }
+

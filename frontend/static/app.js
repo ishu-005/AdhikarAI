@@ -550,7 +550,7 @@ async function sendQuestion() {
     }
 
     state.conversationId = data.conversation_id || state.conversationId;
-  removeTypingMessage();
+    removeTypingMessage();
     appendMessage("assistant", data.answer || "No answer generated.");
 
     domainBadge.textContent = `domain: ${data.domain || "-"}`;

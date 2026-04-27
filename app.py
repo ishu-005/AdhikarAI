@@ -35,8 +35,8 @@ load_dotenv()
 
 # App and model setup
 app = FastAPI(title="GenricAsk RAG API", version="1.1.0")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
+templates = Jinja2Templates(directory="frontend/templates")
 
 LINKS_FILE = Path("links.yaml")
 

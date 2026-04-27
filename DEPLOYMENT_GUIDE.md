@@ -124,13 +124,13 @@ Once deployed:
 ### 1. Prepare Frontend Files
 Files needed for Vercel:
 ```
-templates/index.html
-static/app.js
-static/styles.css
+frontend/templates/index.html
+frontend/static/app.js
+frontend/static/styles.css
 vercel.json
 ```
 
-These are already in your repo.
+These are already in your repo under the `frontend/` folder.
 
 ### 2. Deploy on Vercel
 1. Go to https://vercel.com
@@ -139,7 +139,7 @@ These are already in your repo.
 4. Import your GitHub repo
 5. Configure:
    - **Build Command**: `echo 'Static build'` (we're deploying static files)
-   - **Output Directory**: `./`
+   - **Output Directory**: `frontend/`
 6. Add **Environment Variables**:
    ```
    NEXT_PUBLIC_API_URL = https://adhikarai-backend.onrender.com
