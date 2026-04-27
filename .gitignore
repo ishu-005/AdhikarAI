@@ -1,0 +1,15 @@
+.env
+.env.local
+.env.production.local
+.venv/
+__pycache__/
+*.pyc
+*.log
+crawl_hashes.json
+chroma_store/
+pdfs/
+*.pdf
+.DS_Store
+node_modules/
+.vscode/
+.idea/

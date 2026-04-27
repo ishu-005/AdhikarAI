@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AdhikarAI - Legal Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+
+    <main class="app-shell reveal">
+      <aside class="sidebar panel" aria-label="Conversations">
+        <div class="brand-row">
+          <div class="brand-block">
+            <p class="eyebrow">Citizen legal assistant</p>
+            <h1>AdhikarAI</h1>
+            <p class="muted">Threaded legal chat in Hindi and English.</p>
+          </div>
+          <button id="themeToggleBtn" class="btn-icon" type="button" aria-label="Toggle theme">Light</button>
+        </div>
+
+        <button id="newChatBtn" class="btn-primary" type="button">+ New chat</button>
+
+        <div class="thread-section">
+          <p class="section-title">Recent chats</p>
+          <ul id="threadList" class="thread-list"></ul>
+        </div>
+      </aside>
+
+      <section class="chat-column panel" aria-label="Chat interface">
+        <header class="chat-head">
+          <div class="chat-head-main">
+            <h2 id="chatTitle">New legal chat</h2>
+            <p id="contextNotice" class="muted">Source: -</p>
+          </div>
+          <div class="chat-head-side">
+            <span id="healthBadge" class="status-badge status-idle">status: checking</span>
+            <button id="insightsToggleBtn" class="btn-secondary insights-toggle" type="button" aria-expanded="false">Insights</button>
+            <div class="meta-badges">
+              <span id="domainBadge" class="badge muted">domain: -</span>
+              <span id="languageBadge" class="badge muted">language: -</span>
+            </div>
+          </div>
+        </header>
+
+        <div id="messages" class="chat-messages" aria-live="polite"></div>
+
+        <footer class="composer">
+          <label class="sr-only" for="composerInput">Message</label>
+          <textarea
+            id="composerInput"
+            rows="3"
+            placeholder="Ask your legal question... (Enter to send, Shift+Enter for new line)"
+          ></textarea>
+          <div class="composer-actions">
+            <p id="composerMeta" class="muted">0 chars</p>
+            <button id="sendBtn" class="btn-primary" type="button">Send</button>
+          </div>
+        </footer>
+      </section>
+
+      <aside id="insightsPanel" class="insights panel" aria-label="Sources and ingestion" aria-hidden="true">
+        <div class="insights-head">
+          <button id="insightsHeadToggleBtn" class="insights-head-toggle" type="button" aria-label="Hide insight box">
+            <h2>Insight Box</h2>
+            <p class="muted">Evidence and data controls for the active chat.</p>
+          </button>
+        </div>
+
+        <section class="insight-block" data-collapsible>
+          <button class="panel-head collapse-toggle" type="button" aria-expanded="true">
+            <span class="collapse-title">Citations</span>
+            <span class="panel-head-right">
+              <span id="citationCount" class="count-pill">0</span>
+              <span class="chevron" aria-hidden="true">▾</span>
+            </span>
+          </button>
+          <div class="collapse-content">
+            <ul id="citations" class="list"></ul>
+          </div>
+        </section>
+
+        <section class="insight-block" data-collapsible>
+          <button class="panel-head collapse-toggle" type="button" aria-expanded="true">
+            <span class="collapse-title">Live web sources</span>
+            <span class="panel-head-right">
+              <span id="liveCount" class="count-pill">0</span>
+              <span class="chevron" aria-hidden="true">▾</span>
+            </span>
+          </button>
+          <div class="collapse-content">
+            <div id="liveSources" class="live-grid"></div>
+          </div>
+        </section>
+
+        <section class="insight-block" data-collapsible>
+          <button class="panel-head collapse-toggle" type="button" aria-expanded="true">
+            <span class="collapse-title">Configured sources</span>
+            <span class="panel-head-right">
+              <span id="sourceCount" class="count-pill">0</span>
+              <span class="chevron" aria-hidden="true">▾</span>
+            </span>
+          </button>
+          <div class="collapse-content">
+            <ul id="sources" class="source-grid"></ul>
+          </div>
+        </section>
+
+        <section class="insight-block" data-collapsible>
+          <button class="panel-head collapse-toggle" type="button" aria-expanded="true">
+            <span class="collapse-title">Upload PDF</span>
+            <span class="panel-head-right">
+              <span class="chevron" aria-hidden="true">▾</span>
+            </span>
+          </button>
+          <div class="collapse-content">
+            <div class="upload-grid">
+              <label>
+                Domain
+                <select id="uploadDomain"></select>
+              </label>
+              <label>
+                PDF file
+                <input id="uploadFile" type="file" accept="application/pdf" />
+              </label>
+              <button id="uploadBtn" class="btn-secondary" type="button">Upload PDF</button>
+            </div>
+            <p id="uploadStatus" class="muted">No upload yet.</p>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <template id="messageTpl">
+      <article class="msg">
+        <p class="msg-role"></p>
+        <div class="msg-body"></div>
+      </article>
+    </template>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

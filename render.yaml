@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: adhikarai-backend
+    runtime: python
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    
+    envVars:
+      - key: GROQ_API_KEY
+        scope: build,runtime
+      - key: SUPABASE_URL
+        scope: build,runtime
+      - key: SUPABASE_API_KEY
+        scope: build,runtime
+      - key: SUPABASE_BUCKET_NAME
+        value: pdfs
+      - key: USE_SUPABASE
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: LOG_LEVEL
+        value: INFO
+    
+    disk:
+      name: chroma-storage
+      path: /opt/render/chroma_store
+      sizeGB: 1
+    
+    maxInstances: 1
+    minInstances: 1
+    plan: free
+    
+    # Health check configuration
+    healthCheckPath: /api/health
+    healthCheckInterval: 30

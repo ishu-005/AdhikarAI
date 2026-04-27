@@ -1,0 +1,107 @@
+# These pages update regularly — crawler checks them on schedule
+# Add any new URL here. No code changes needed.
+
+dynamic_sources:
+
+  # Government portals (check weekly — procedures change)
+  - url: "https://consumerhelpline.gov.in/consumer-rights.php"
+    label: "Consumer Rights Guide"
+    domain: "consumer"
+    refresh_days: 7
+    enabled: false  # currently returns 403
+
+  - url: "https://rtionline.gov.in"
+    label: "RTI Filing Portal"
+    domain: "rti"
+    refresh_days: 7
+
+  - url: "https://pgportal.gov.in"
+    label: "Public Grievance Portal"
+    domain: "grievance"
+    refresh_days: 7
+    enabled: false  # SSL validation issue from current runtime
+
+  - url: "https://nhrc.nic.in/complaints-procedure"
+    label: "NHRC Complaint Procedure"
+    domain: "human_rights"
+    refresh_days: 7
+    enabled: false  # currently resolves to 404
+
+  - url: "https://ncw.nic.in/helpline"
+    label: "NCW Women Helpline"
+    domain: "women"
+    refresh_days: 7
+    enabled: false  # connection refused from current runtime
+
+  # Legal amendment pages (check monthly — acts get amended)
+  - url: "https://www.indiacode.nic.in/handle/123456789/20062"
+    label: "BNS 2023 — India Code page"
+    domain: "criminal_law"
+    refresh_days: 30
+
+  - url: "https://legislative.gov.in/acts-rules"
+    label: "Ministry of Law — Acts Index"
+    domain: "legislation"
+    refresh_days: 30
+
+  - url: "https://labour.gov.in/acts-rules"
+    label: "Labour Ministry — Acts"
+    domain: "labour"
+    refresh_days: 30
+
+  # Supreme Court — latest judgements (check daily)
+  - url: "https://main.sci.gov.in/judgments"
+    label: "Supreme Court Latest Judgements"
+    domain: "case_law"
+    refresh_days: 1
+    enabled: false  # remote certificate issue
+
+  - url: "https://indiankanoon.org/search/?formInput=fundamental+rights"
+    label: "Indian Kanoon — Fundamental Rights cases"
+    domain: "case_law"
+    refresh_days: 3
+
+  # Additional authoritative sources (phase 1 expansion)
+  - url: "https://www.indiacode.nic.in/handle/123456789/2263"
+    label: "Code of Civil Procedure — India Code page"
+    domain: "legislation"
+    refresh_days: 30
+
+  - url: "https://www.indiacode.nic.in/handle/123456789/1565"
+    label: "Indian Evidence legacy page"
+    domain: "legislation"
+    refresh_days: 30
+
+  - url: "https://www.education.gov.in/en/right-education"
+    label: "Right to Education overview"
+    domain: "citizen_rights"
+    refresh_days: 30
+    enabled: false  # verify long-term stability before enabling crawl
+
+  - url: "https://nalsa.gov.in/"
+    label: "NALSA legal aid portal"
+    domain: "citizen_rights"
+    refresh_days: 14
+
+  - url: "https://www.sebi.gov.in/legal/circulars.html"
+    label: "SEBI legal circulars"
+    domain: "property_finance"
+    refresh_days: 14
+    enabled: false  # broad corpus; needs scoped extraction strategy
+
+  - url: "https://dea.gov.in/bare-acts"
+    label: "DEA bare acts listing"
+    domain: "property_finance"
+    refresh_days: 30
+    enabled: false  # verify crawl quality and anti-bot behavior
+
+  - url: "https://www.mospi.gov.in/minimum-wages"
+    label: "Minimum wages references"
+    domain: "labour"
+    refresh_days: 30
+    enabled: false  # verify content relevance before enabling
+
+  - url: "https://www.india.gov.in/topics/law-justice"
+    label: "India.gov law and justice index"
+    domain: "legislation"
+    refresh_days: 30
