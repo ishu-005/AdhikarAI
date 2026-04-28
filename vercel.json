@@ -15,9 +15,6 @@
       "destination": "/templates/index.html"
     }
   ],
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@adhikarai_api_url"
-  },
   "git": {
     "deploymentEnabled": {
       "main": true

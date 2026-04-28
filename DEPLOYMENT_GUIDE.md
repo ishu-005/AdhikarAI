@@ -104,7 +104,13 @@ git push -u origin main
    USE_SUPABASE = true
    ALLOWED_ORIGINS = *
    LOG_LEVEL = INFO
+   EMBEDDING_MODEL = sentence-transformers/all-MiniLM-L6-v2
+   EMBEDDING_MODEL_FALLBACK = sentence-transformers/all-MiniLM-L6-v2
+   RERANKER_ENABLED = false
    ```
+   
+   **Note**: Free tier has 512MB RAM. The lightweight settings above use ~80MB, preventing out-of-memory errors. For production with more memory, you can upgrade to larger models (e.g., `intfloat/multilingual-e5-large`).
+
 7. Select **Free Plan**
 8. Click **Create Web Service** → Wait 3-5 minutes for deployment
 
@@ -224,6 +230,7 @@ Then open: `http://localhost:8000`
 
 | Issue | Solution |
 |-------|----------|
+| **Render: Out of memory (512MB)** | Use lightweight models: `EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2`, `RERANKER_ENABLED=false` |
 | **CORS error on Vercel** | Check `ALLOWED_ORIGINS` on Render includes Vercel domain |
 | **Backend URL not found** | Render free tier might be sleeping; first request takes 30s |
 | **Chats not persisting** | Verify `USE_SUPABASE=true` and Supabase credentials are correct |
@@ -249,7 +256,12 @@ SUPABASE_URL=https://[project-id].supabase.co
 SUPABASE_API_KEY=[service_role_key]
 SUPABASE_BUCKET_NAME=pdfs
 ALLOWED_ORIGINS=https://your-vercel-url.vercel.app
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_MODEL_FALLBACK=sentence-transformers/all-MiniLM-L6-v2
+RERANKER_ENABLED=false
 ```
+
+**Free Tier Note**: Render free tier has 512MB RAM. The lightweight model settings above fit comfortably. To use larger models after upgrading, update `EMBEDDING_MODEL` and set `RERANKER_ENABLED=true`.
 
 ---
 
