@@ -830,7 +830,7 @@ def generate_answer(
 ) -> str:
     settings = get_settings()
     if not settings.groq_api_key:
-        return fallback_answer(question, context_chunks, live_chunks, language, sources)
+        return "Groq API key is not set."
 
     context_block = "\n\n".join(context_chunks[:5])
     live_block = "\n\n".join(
@@ -1064,11 +1064,10 @@ async def query(payload: QueryRequest):
             prior_messages,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Answer generation failed, using fallback: %s", exc)
-        answer = fallback_answer(question, context_chunks, live_chunks, language, sources)
-        answer += "\n\n" + ("नोट: अभी live generation उपलब्ध नहीं है. Fallback response दिया गया है." if language == "hi" else "Note: Live generation unavailable right now. Fallback response provided.")
+        logger.exception("Answer generation failed: %s", exc)
+        answer = "Groq API key is not set."
 
-    if language == "hi" and not re.search(r"[\u0900-\u097F]", answer):
+    if answer != "Groq API key is not set." and language == "hi" and not re.search(r"[\u0900-\u097F]", answer):
         answer = fallback_answer(question, context_chunks, live_chunks, language, sources)
         answer += "\n\nनोट: मॉडल ने हिंदी में स्पष्ट उत्तर नहीं दिया, इसलिए हिंदी fallback उत्तर दिया गया है."
 

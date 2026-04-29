@@ -1,11 +1,8 @@
-apscheduler
-beautifulsoup4
 chromadb
 fastapi
 jinja2
 python-dotenv
 python-multipart
-PyMuPDF
 PyYAML
 requests
 sentence-transformers

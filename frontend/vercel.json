@@ -1,10 +1,10 @@
 {
   "buildCommand": "echo 'Static build complete'",
-  "outputDirectory": "frontend",
+  "outputDirectory": ".",
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://adhikarai-backend.onrender.com/api/:path*"
+      "destination": "/api/:path*"
     },
     {
       "source": "/static/:path*",
@@ -19,16 +19,6 @@
     "deploymentEnabled": {
       "main": true
     }
-  },
-  "headers": [
-    {
-      "source": "/static/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ]
+  }
 }
+

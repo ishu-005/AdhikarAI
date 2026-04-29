@@ -58,28 +58,28 @@ Create a `.env` file (see `.env.example`):
 
 ## 4) Local Run
 
-Install dependencies:
+Install backend dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-Optional: download starter PDFs:
+Optional: download starter PDFs (from backend folder):
 
 ```bash
-python pdfDownload.py
+python backend/pdfDownload.py
 ```
 
 Ingest PDFs and dynamic links:
 
 ```bash
-python ingestor.py
+python backend/ingestor.py
 ```
 
-Run API/web app:
+Run API/web app (start backend server):
 
 ```bash
-python app.py
+python backend/app.py
 ```
 
 This keeps the server tied to that terminal session. If you close/kill that terminal, the local server stops.

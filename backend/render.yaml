@@ -4,6 +4,7 @@ services:
     runtime: python
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     buildCommand: pip install -r requirements.txt
+    pythonVersion: 3.11
     
     envVars:
       - key: GROQ_API_KEY
@@ -15,11 +16,15 @@ services:
       - key: SUPABASE_BUCKET_NAME
         value: pdfs
       - key: USE_SUPABASE
-        value: "true"
+        value: "false"
       - key: ALLOWED_ORIGINS
         value: "*"
       - key: LOG_LEVEL
         value: INFO
+      - key: EMBEDDING_MODEL_FALLBACK
+        value: "hashing-384-v1"
+      - key: RERANKER_ENABLED
+        value: "false"
     
     disk:
       name: chroma-storage
@@ -33,3 +38,6 @@ services:
     # Health check configuration
     healthCheckPath: /api/health
     healthCheckInterval: 30
+    
+    # Free tier optimizations
+    preDeployCommand: "echo 'Pre-deploy preparation complete'"

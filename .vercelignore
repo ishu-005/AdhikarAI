@@ -1,0 +1,12 @@
+backend/
+pdfs/
+chroma_store/
+*.py
+requirements.txt
+render.yaml
+.env
+.env.example
+node_modules/
+.git/
+README.md
+supabase-schema.sql
