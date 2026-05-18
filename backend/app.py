@@ -6,6 +6,7 @@ import math
 import unicodedata
 import uuid
 import atexit
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from functools import lru_cache
@@ -68,15 +69,19 @@ def cleanup_http_session() -> None:
 
 atexit.register(cleanup_http_session)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize_runtime_on_startup(app)
+    try:
+        yield
+    finally:
+        cleanup_http_session()
+
+
 # App and model setup
-app = FastAPI(title="GenricAsk RAG API", version="1.1.0")
+app = FastAPI(title="GenricAsk RAG API", version="1.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 templates = Jinja2Templates(directory="frontend/templates")
-
-
-@app.on_event("shutdown")
-def on_shutdown() -> None:
-    cleanup_http_session()
 
 LINKS_FILE = Path("links.yaml")
 
@@ -360,8 +365,7 @@ def get_conversation(conversation_id: str) -> list[dict]:
         return list(messages)
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
+def initialize_runtime_on_startup(app_instance: FastAPI) -> None:
     ensure_runtime_initialized()
     
     # Load existing chats from Supabase if enabled
