@@ -1,3 +1,13 @@
+---
+title: AdhikarAI
+sdk: docker
+app_port: 7860
+emoji: scales
+colorFrom: blue
+colorTo: green
+short_description: RAG legal assistant for citizen rights guidance
+---
+
 # AdhikarAI (RAG Legal Assistant)
 
 FastAPI app for citizen legal guidance using:
@@ -98,27 +108,22 @@ This keeps the server tied to that terminal session. If you close/kill that term
 
 `/api/query` now accepts optional `conversation_id` to support multi-turn chat context.
 
-## 6) Deploy Plan (Production Ready)
+## 6) Deploy Plan (Hugging Face Spaces)
 
-1. Deploy FastAPI app to Render, Railway, or Fly.io.
-2. Use managed PostgreSQL (`pgvector`) on Supabase/Neon.
-3. Keep ingestion as a separate worker process or scheduled job.
-4. Add rate limit and auth at API gateway/reverse proxy.
-5. Store secrets in platform secret manager (never in repo).
-6. Add daily backup policy for DB and document sources.
+1. Create a Hugging Face Space with SDK type `Docker`.
+2. Push this repository to the Space.
+3. Use the included `Dockerfile` to build and run the app on port `7860`.
+4. Add secrets (for example `GROQ_API_KEY`) in Space settings.
+5. Keep ingestion as a manual/scheduled step and use persistent storage if needed.
+6. Prefer Supabase + `pgvector` for durable vector metadata across rebuilds.
 
-Free deployment options:
+Recommended Hugging Face setup:
 
-1. Render free web service + cron job (simple setup, can sleep on free tier)
-2. Railway hobby/free credits (easy env/secret management)
-3. Fly.io starter credits (good for always-on container with volume)
-
-Recommended free stack for this project:
-
-1. App API: Render or Railway
-2. Vector/metadata DB: Supabase Postgres + pgvector free tier
-3. Object/file storage (optional): Supabase Storage free tier
-4. Scheduled ingestion: platform cron or GitHub Actions schedule
+1. Space type: Docker
+2. App process: `uvicorn backend.app:app --host 0.0.0.0 --port 7860`
+3. Secrets: `GROQ_API_KEY` (required), Supabase keys (optional)
+4. Storage: Hugging Face persistent storage or external DB/vector store
+5. Optional database: Supabase Postgres + `pgvector`
 
 ## 7) PDF Folder Structure
 

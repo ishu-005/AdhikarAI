@@ -5,6 +5,7 @@ import logging
 import math
 import unicodedata
 import uuid
+import atexit
 from datetime import UTC, datetime
 from pathlib import Path
 from functools import lru_cache
@@ -12,6 +13,8 @@ from threading import Lock
 
 import chromadb
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import yaml
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -29,14 +32,51 @@ import uvicorn
 
 logger = logging.getLogger("adhikarai")
 if not logger.handlers:
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
 load_dotenv()
+
+
+def create_http_session() -> requests.Session:
+    session = requests.Session()
+    retry_strategy = Retry(total=3, backoff_factor=0.3, status_forcelist=[429, 500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+_http_session: requests.Session | None = None
+
+
+def get_http_session() -> requests.Session:
+    global _http_session
+    if _http_session is None:
+        _http_session = create_http_session()
+    return _http_session
+
+
+def cleanup_http_session() -> None:
+    global _http_session
+    if _http_session is not None:
+        _http_session.close()
+        _http_session = None
+
+
+atexit.register(cleanup_http_session)
 
 # App and model setup
 app = FastAPI(title="GenricAsk RAG API", version="1.1.0")
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 templates = Jinja2Templates(directory="frontend/templates")
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    cleanup_http_session()
 
 LINKS_FILE = Path("links.yaml")
 
@@ -770,7 +810,8 @@ def _call_groq(messages: list[dict], temperature: float = 0.2) -> str:
 
     # Try to intersect with available models from API key and keep best-first ranking.
     try:
-        model_resp = requests.get(
+        session = get_http_session()
+        model_resp = session.get(
             "https://api.groq.com/openai/v1/models",
             headers=headers,
             timeout=12,
@@ -797,7 +838,8 @@ def _call_groq(messages: list[dict], temperature: float = 0.2) -> str:
         }
 
         try:
-            resp = requests.post(
+            session = get_http_session()
+            resp = session.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers=headers,
                 json=payload,
@@ -1106,9 +1148,10 @@ async def query(payload: QueryRequest):
 
 
 if __name__ == "__main__":
+    host = os.getenv("HOST", "0.0.0.0")
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host=host,
         port=int(os.getenv("PORT", "8000")),
         reload=False,
     )

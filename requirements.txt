@@ -7,4 +7,4 @@ PyYAML
 requests
 sentence-transformers
 supabase
-uvicorn
+uvicorn[standard]

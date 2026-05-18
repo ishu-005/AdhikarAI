@@ -1,215 +1,96 @@
-# AdhikarAI - Free Tier Deployment Guide
+# AdhikarAI Deployment (Hugging Face Spaces)
 
-## Vercel Frontend Deployment (Free Tier)
+This app can be deployed on Hugging Face as a Docker Space. It serves UI (`/`), static files (`/static/*`), and API (`/api/*`) from one FastAPI process.
 
-### Prerequisites
-1. GitHub account with this repository
-2. Vercel account (free)
+## Deployment Target
 
-### Steps
-1. Go to [vercel.com](https://vercel.com)
-2. Click "New Project" → Select your GitHub repository
-3. **Configure Settings:**
-   - Framework: Other (it's a static site)
-   - Build Command: `echo 'Static build complete'`
-   - Output Directory: `frontend`
-   - Install Command: (leave empty)
+- Space type: `Docker`
+- Runtime port: `7860`
+- Start command: `uvicorn backend.app:app --host 0.0.0.0 --port 7860`
 
-4. **Set Environment Variables:**
-   - `NEXT_PUBLIC_API_URL`: `https://your-backend-url.onrender.com` (get this after Render deployment)
+## Files Used for Hugging Face
 
-5. Click "Deploy"
-6. Once deployed, note your Vercel URL (e.g., `https://adhikarai.vercel.app`)
+- `Dockerfile` at repo root
+- `.dockerignore` at repo root
 
----
+## Hugging Face Console Steps
 
-## Render Backend Deployment (Free Tier)
+1. Open Hugging Face and create a new Space.
+2. Select `Docker` as the SDK.
+3. Choose your Space visibility.
+4. Connect GitHub repo or push this repo to the Space.
+5. In Space Settings -> Variables and secrets, add required env vars.
+6. Let the Space build and start.
+7. Open the Space URL and test `/api/health`.
 
-### Prerequisites
-1. GitHub account with this repository
-2. Render account (free)
+## Quickstart Commands (From Local Machine)
 
-### Steps
-1. Go to [render.com](https://render.com)
-2. Click "New +" → Select "Web Service"
-3. **Connect Repository:**
-   - Select GitHub repository
-   - Choose deployment branch (main/master)
+Use these commands to push your current app to the Space repository.
 
-4. **Configure Deployment:**
-   - Service Name: `adhikarai-backend` (or your choice)
-   - Environment: `Python 3.11`
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn app:app --host 0.0.0.0 --port $PORT`
-   - Plan: **Free** (important!)
+1. Clone the Space repository:
 
-5. **Set Environment Variables** (Required):
-   ```
-   PORT=8000
-   GROQ_API_KEY=sk-... (get from https://console.groq.com)
-   ALLOWED_ORIGINS=https://your-frontend-url.vercel.app,http://localhost:3000
-   ```
+	git clone https://huggingface.co/spaces/ishu005/AdhikarAI
 
-   **Optional (for chat persistence):**
-   ```
-   USE_SUPABASE=false  (set to "true" to enable Supabase)
-   SUPABASE_URL=https://xxxxx.supabase.co
-   SUPABASE_API_KEY=eyJ...
-   ```
+2. Install HF CLI on Windows PowerShell (if needed):
 
-6. **Disk Storage (for vector database):**
-   - Render automatically provisions 1GB at `/opt/render/chroma_store`
+	powershell -ExecutionPolicy ByPass -c "irm https://hf.co/cli/install.ps1 | iex"
 
-7. Click "Create Web Service"
-8. Wait for deployment (2-3 minutes)
-9. Once deployed, you'll get a URL like `https://adhikarai-backend.onrender.com`
+3. Optional: download current Space snapshot:
 
----
+	hf download ishu005/AdhikarAI --repo-type=space
 
-## Update Frontend API URL
+4. Copy this project files into the cloned Space folder.
 
-After Render deployment, update your Vercel environment:
+5. Commit and push:
 
-1. Go to Vercel dashboard → Your project
-2. Settings → Environment Variables
-3. Update `NEXT_PUBLIC_API_URL` with your Render backend URL
-4. Redeployment will trigger automatically
+	git add .
+	git commit -m "Deploy AdhikarAI Docker Space"
+	git push
 
----
+When prompted for password, use a Hugging Face access token with write permission.
 
-## Free Tier Limitations & Workarounds
+## Required Environment Variables
 
-### Render Free Tier
-| Feature | Limit | Workaround |
-|---------|-------|-----------|
-| **Cold Start** | ~1-2 min on idle | Accept delay on first request after 15min idle |
-| **Memory** | 512MB | Set `EMBEDDING_MODEL_FALLBACK=hashing-384-v1` (fallback uses <100MB) |
-| **Disk** | 1GB | Sufficient for chroma_store; use Supabase for chat history |
-| **Build Time** | 15 min timeout | Keep requirements.txt minimal |
-| **Restart Policy** | Daily restart | Automatic, app recovers from .chroma_store persistence |
+At minimum:
 
-### Vercel Free Tier
-| Feature | Limit | Details |
-|---------|-------|---------|
-| **Serverless Functions** | 100GB/month | Static sites have no function limit |
-| **Static Assets** | Unlimited | Perfect for frontend serving |
-| **Bandwidth** | Generous | No overage charges on free tier |
-| **Build Time** | 45 seconds | Our build is instant (static) |
-
----
-
-## Optimization Tips for Free Tier Success
-
-### 1. **Backend Memory Usage** (Critical for Render)
 ```env
-EMBEDDING_MODEL_FALLBACK=hashing-384-v1          # <100MB (use for cold starts)
-EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2  # ~350MB
-RERANKER_ENABLED=false                            # Saves 300MB+ on free tier
-```
-
-### 2. **Enable Supabase for Chat Persistence** (Recommended)
-```env
-USE_SUPABASE=true
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_API_KEY=your-service-role-key
-```
-- Free tier: 500MB storage, 3 connections
-- Chroma data survives across Render restarts
-- Chat history persisted
-
-### 3. **Frontend Configuration**
-- Static site on Vercel = no cold starts ✓
-- API calls proxy through rewrites (vercel.json)
-- Gzip compression enabled by default ✓
-
----
-
-## Testing Deployment
-
-### Test Backend Health
-```bash
-curl https://your-backend-url.onrender.com/api/health
-```
-
-Expected response:
-```json
-{
-  "status": "ok",
-  "time": "2024-04-28T10:30:00.000Z",
-  "model_loaded": true,
-  "vector_store_ready": true
-}
-```
-
-### Test Frontend
-1. Visit `https://your-frontend-url.vercel.app`
-2. Try typing a legal question
-3. Check browser console for API errors
-
----
-
-## Monitoring & Troubleshooting
-
-### Check Render Logs
-1. Render Dashboard → Your service
-2. "Logs" tab for real-time output
-3. Look for:
-   - "Initialization complete" = Ready ✓
-   - "Groq generation failed" = Check API key ✗
-   - "Out of memory" = Model too large for tier
-
-### Check Vercel Logs
-1. Vercel Dashboard → Your project
-2. "Deployments" tab → Click active deployment
-3. "Logs" for build and runtime errors
-
----
-
-## Environment Variables Reference
-
-**Backend Required (.env on Render):**
-```
-PORT=8000
 GROQ_API_KEY=sk-...
 ```
 
-**Backend Recommended:**
-```
-ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
-EMBEDDING_MODEL_FALLBACK=hashing-384-v1
+Recommended:
+
+```env
+PORT=7860
+LOG_LEVEL=INFO
+ALLOWED_ORIGINS=*
 RERANKER_ENABLED=false
+EMBEDDING_MODEL_FALLBACK=hashing-384-v1
 ```
 
-**Backend Optional (Supabase):**
-```
+Optional (Supabase):
+
+```env
 USE_SUPABASE=true
-SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_API_KEY=eyJ...
 SUPABASE_BUCKET_NAME=pdfs
 ```
 
----
+## Verify Deployment
 
-## Cost Estimate
+After build succeeds, open:
 
-| Service | Free Tier | Cost (if exceeding) |
-|---------|-----------|-------------------|
-| **Vercel** | Unlimited static sites | $0.15/GB bandwidth |
-| **Render** | 750 compute hours/month | $0.10/hour after tier |
-| **Supabase** (optional) | 500MB database | $0.115/GB over limit |
-| **Groq API** | Pay-as-you-go | ~$0.0002-0.0008 per request |
+```text
+https://huggingface.co/spaces/<username>/<space-name>
+```
 
-**Monthly Cost on Free Tier: ~$0 (if within limits)**
+Health endpoint:
 
----
+```text
+https://<space-subdomain>.hf.space/api/health
+```
 
-## Support & Next Steps
+## Notes
 
-1. **First Deploy:** Follow the step-by-step guide above
-2. **Custom Domain:** Both Vercel and Render support custom domains (free)
-3. **Database:** Migrate to Supabase for multi-instance scaling
-4. **Scaling:** When free tier limits hit, upgrade Render to "$7/month" plan
-
-For issues:
-- Render: [Support](https://render.com/support)
-- Vercel: [Support](https://vercel.com/support)
+- Hugging Face Spaces storage is ephemeral unless persistent storage is enabled.
+- If you need stable long-term vector data, use Supabase/pgvector or Space persistent storage.
