@@ -2,7 +2,7 @@
 title: AdhikarAI
 sdk: docker
 app_port: 7860
-emoji: scales
+emoji: 🤖
 colorFrom: blue
 colorTo: green
 short_description: RAG legal assistant for citizen rights guidance
