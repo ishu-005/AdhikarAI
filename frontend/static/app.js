@@ -24,6 +24,10 @@ const uploadDomainEl = document.getElementById("uploadDomain");
 const uploadFileEl = document.getElementById("uploadFile");
 const uploadStatusEl = document.getElementById("uploadStatus");
 const composerMetaEl = document.getElementById("composerMeta");
+const sidebarToggle = document.getElementById("sidebarToggle");
+const sidebar = document.getElementById("sidebar");
+const appShell = document.querySelector(".app-shell");
+const toastContainer = document.getElementById("toastContainer");
 
 const THREAD_STORAGE_KEY = "adhikarai_threads_v1";
 const THEME_STORAGE_KEY = "adhikarai_theme_v1";
@@ -198,7 +202,7 @@ function upsertThread(patch) {
 
 function renderThreadList() {
   if (!state.threads.length) {
-    threadListEl.innerHTML = '<li class="thread-empty muted">No chats yet.</li>';
+    threadListEl.innerHTML = '<li class="thread-empty muted">No chats yet. Click <strong>+ New chat</strong> to start</li>';
     return;
   }
 
@@ -207,12 +211,12 @@ function renderThreadList() {
       const activeClass = thread.id === state.conversationId ? "thread-item active" : "thread-item";
       return `
         <li class="thread-row">
-          <button class="${activeClass}" type="button" data-thread-id="${escapeHtml(thread.id)}">
+          <button class="${activeClass}" type="button" data-thread-id="${escapeHtml(thread.id)}" aria-label="Open chat: ${escapeHtml(thread.title || 'New legal chat')}">
             <p class="thread-title">${escapeHtml(thread.title || "New legal chat")}</p>
             <p class="thread-preview">${escapeHtml(thread.preview || "No messages yet")}</p>
             <p class="thread-meta">${escapeHtml(formatTime(thread.updatedAt || ""))}</p>
           </button>
-          <button class="thread-delete" type="button" data-delete-thread-id="${escapeHtml(thread.id)}" aria-label="Delete chat">Delete</button>
+          <button class="thread-delete" type="button" data-delete-thread-id="${escapeHtml(thread.id)}" aria-label="Delete chat: ${escapeHtml(thread.title || 'New legal chat')}">Delete</button>
         </li>
       `;
     })
@@ -305,7 +309,13 @@ function renderLiveSources(items) {
 
 function renderMessages() {
   if (!state.messages.length) {
-    messagesEl.innerHTML = '<p class="msg-empty muted">Start typing to begin this legal chat.</p>';
+    messagesEl.innerHTML = `
+      <div class="msg-empty" role="status" aria-live="polite">
+        <div>✨ Welcome to AdhikarAI</div>
+        <p>Your AI legal assistant for citizens. Ask questions about laws, rights, and regulations in Hindi or English.</p>
+        <p style="font-size: 0.85rem; margin-top: 8px;">💡 Start typing your legal question above to begin</p>
+      </div>
+    `;
     return;
   }
 
@@ -323,8 +333,10 @@ function renderMessages() {
     roleEl.textContent = message.role === "assistant" ? "Assistant" : "You";
     if (message.isTyping) {
       bodyEl.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+      article.setAttribute("aria-busy", "true");
     } else {
       bodyEl.textContent = message.content;
+      article.setAttribute("aria-busy", "false");
     }
     messagesEl.appendChild(node);
   });
@@ -366,7 +378,7 @@ async function fetchSources() {
     const data = await resp.json();
     renderConfiguredSources(data.dynamic_sources || []);
   } catch (err) {
-    sourcesEl.innerHTML = `<li class="source-card"><p>Could not load sources: ${escapeHtml(err.message)}</p></li>`;
+    sourcesEl.innerHTML = `<li class="source-card"><p>⚠️ Could not load sources</p><p style="font-size: 0.8rem;">${escapeHtml(err.message)}</p></li>`;
   }
 }
 
@@ -387,6 +399,7 @@ async function fetchDomains() {
     }
   } catch (err) {
     console.warn("Could not load domains", err);
+    showToast("⚠️ Could not load legal domains", "error", 2000);
   }
 }
 
@@ -395,7 +408,12 @@ async function uploadPdf() {
   const file = uploadFileEl.files?.[0];
 
   if (!file) {
-    uploadStatusEl.textContent = "Please choose a PDF file first.";
+    showToast("Please choose a PDF file first.", "error");
+    return;
+  }
+
+  if (!domain) {
+    showToast("Please select a domain.", "error");
     return;
   }
 
@@ -405,6 +423,7 @@ async function uploadPdf() {
 
   uploadBtn.disabled = true;
   uploadBtn.textContent = "Uploading...";
+  uploadStatusEl.textContent = "Uploading...";
 
   try {
     const resp = await fetch("/api/upload-pdf", {
@@ -417,10 +436,12 @@ async function uploadPdf() {
       throw new Error(data.detail || data.error || "Upload failed");
     }
 
-    uploadStatusEl.textContent = `Uploaded ${data.filename} to ${data.saved_to}`;
+    uploadStatusEl.textContent = `✓ Uploaded ${data.filename}`;
     uploadFileEl.value = "";
+    showToast(`PDF uploaded successfully to ${domain}`, "success");
   } catch (err) {
-    uploadStatusEl.textContent = `Upload error: ${err.message}`;
+    uploadStatusEl.textContent = `✗ Error: ${err.message}`;
+    showToast(`Upload error: ${err.message}`, "error");
   } finally {
     uploadBtn.disabled = false;
     uploadBtn.textContent = "Upload PDF";
@@ -533,6 +554,9 @@ async function sendQuestion() {
   sendBtn.textContent = "Thinking...";
   appendMessage("assistant", "", { isTyping: true });
 
+  // ⚡ Show immediate feedback
+  showToast("Analyzing your question...", "info", 1500);
+
   try {
     const resp = await fetch("/api/query", {
       method: "POST",
@@ -562,10 +586,15 @@ async function sendQuestion() {
     renderCitations(data.citations || []);
     renderLiveSources(data.live_sources || []);
     updateThreadAfterResponse(question, data.answer || "", data.language, data.domain);
+    
+    // ⚡ Show success with cache indicator
+    const cacheMsg = data._cached ? " (cached)" : "";
+    showToast(`✓ Response ready${cacheMsg}`, "success", 2000);
   } catch (err) {
     removeTypingMessage();
-    appendMessage("assistant", `Error: ${err.message}`);
+    appendMessage("assistant", `⚠ Error: ${err.message}`);
     contextNoticeEl.textContent = "Source: -";
+    showToast(`Error: ${err.message}`, "error");
   } finally {
     state.isSending = false;
     updateSendState();
@@ -573,18 +602,58 @@ async function sendQuestion() {
   }
 }
 
+function showToast(message, type = "info", duration = 3000) {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toast.setAttribute("role", "status");
+  toastContainer.appendChild(toast);
+
+  if (duration > 0) {
+    setTimeout(() => {
+      toast.style.animation = "toastSlideOut 300ms ease forwards";
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }
+
+  return toast;
+}
+
+function toggleSidebar() {
+  const isOpen = appShell.classList.contains("sidebar-open");
+  appShell.classList.toggle("sidebar-open", !isOpen);
+  sidebarToggle.setAttribute("aria-expanded", String(!isOpen));
+}
+
+function closeSidebar() {
+  appShell.classList.remove("sidebar-open");
+  sidebarToggle.setAttribute("aria-expanded", "false");
+}
+
 function bindEvents() {
   sendBtn.addEventListener("click", sendQuestion);
-  newChatBtn.addEventListener("click", createNewChat);
+  newChatBtn.addEventListener("click", () => {
+    createNewChat();
+    if (window.innerWidth < 860) {
+      closeSidebar();
+    }
+  });
   themeToggleBtn.addEventListener("click", toggleTheme);
   insightsToggleBtn.addEventListener("click", toggleInsights);
   insightsHeadToggleBtn.addEventListener("click", () => setInsightsOpen(false));
   uploadBtn.addEventListener("click", uploadPdf);
+  sidebarToggle.addEventListener("click", toggleSidebar);
 
+  // ⚡ Enhanced keyboard controls
   composerInput.addEventListener("keydown", (event) => {
     if (!event.shiftKey && event.key === "Enter") {
       event.preventDefault();
       sendQuestion();
+    }
+    // Ctrl+K to focus composer (quick search)
+    if (event.ctrlKey && event.key === "k") {
+      event.preventDefault();
+      composerInput.focus();
     }
   });
 
@@ -608,11 +677,35 @@ function bindEvents() {
     }
     const threadId = target.getAttribute("data-thread-id");
     loadConversation(threadId);
+    if (window.innerWidth < 860) {
+      closeSidebar();
+    }
   });
 
+  // ⚡ Global keyboard shortcuts
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.insightsOpen) {
-      setInsightsOpen(false);
+    if (event.key === "Escape") {
+      if (state.insightsOpen) {
+        setInsightsOpen(false);
+      }
+      if (appShell.classList.contains("sidebar-open")) {
+        closeSidebar();
+      }
+    }
+    // Ctrl+N for new chat
+    if (event.ctrlKey && event.key === "n") {
+      event.preventDefault();
+      createNewChat();
+    }
+    // Ctrl+T for toggle theme
+    if (event.ctrlKey && event.key === "t") {
+      event.preventDefault();
+      toggleTheme();
+    }
+    // Ctrl+/ for help
+    if (event.ctrlKey && event.key === "/") {
+      event.preventDefault();
+      showToast("Shortcuts: Ctrl+N=New Chat, Ctrl+T=Theme, Ctrl+K=Focus, Shift+Enter=New Line", "info", 4000);
     }
   });
 }

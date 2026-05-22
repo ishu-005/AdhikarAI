@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS chat_metadata (
 CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   content TEXT NOT NULL,
-  embedding VECTOR(384),
+  embedding VECTOR(1024),
   metadata JSONB DEFAULT '{}',
   domain TEXT,
   filename TEXT,

@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="AdhikarAI - Free legal assistance in Hindi and English" />
     <title>AdhikarAI - Legal Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,8 +17,12 @@
     <div class="bg-orb orb-a"></div>
     <div class="bg-orb orb-b"></div>
 
-    <main class="app-shell reveal">
-      <aside class="sidebar panel" aria-label="Conversations">
+    <div id="toastContainer" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+    <main class="app-shell reveal" role="main">
+      <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="false">☰</button>
+
+      <aside class="sidebar panel" aria-label="Conversations" id="sidebar">
         <div class="brand-row">
           <div class="brand-block">
             <p class="eyebrow">Citizen legal assistant</p>
@@ -27,11 +32,11 @@
           <button id="themeToggleBtn" class="btn-icon" type="button" aria-label="Toggle theme">Light</button>
         </div>
 
-        <button id="newChatBtn" class="btn-primary" type="button">+ New chat</button>
+        <button id="newChatBtn" class="btn-primary" type="button" aria-label="Start a new legal chat">+ New chat</button>
 
         <div class="thread-section">
-          <p class="section-title">Recent chats</p>
-          <ul id="threadList" class="thread-list"></ul>
+          <h2 class="section-title">Recent chats</h2>
+          <ul id="threadList" class="thread-list" role="list"></ul>
         </div>
       </aside>
 
@@ -51,18 +56,19 @@
           </div>
         </header>
 
-        <div id="messages" class="chat-messages" aria-live="polite"></div>
+        <div id="messages" class="chat-messages" aria-live="polite" role="log"></div>
 
         <footer class="composer">
-          <label class="sr-only" for="composerInput">Message</label>
+          <label for="composerInput">Your question <span class="muted" style="font-size: 0.85rem;">(English or Hindi)</span></label>
           <textarea
             id="composerInput"
             rows="3"
             placeholder="Ask your legal question... (Enter to send, Shift+Enter for new line)"
+            aria-describedby="composerMeta"
           ></textarea>
           <div class="composer-actions">
             <p id="composerMeta" class="muted">0 chars</p>
-            <button id="sendBtn" class="btn-primary" type="button">Send</button>
+            <button id="sendBtn" class="btn-primary" type="button" aria-label="Send your legal question">Send</button>
           </div>
         </footer>
       </section>
@@ -123,15 +129,19 @@
           </button>
           <div class="collapse-content">
             <div class="upload-grid">
-              <label>
-                Domain
-                <select id="uploadDomain"></select>
-              </label>
-              <label>
-                PDF file
-                <input id="uploadFile" type="file" accept="application/pdf" />
-              </label>
-              <button id="uploadBtn" class="btn-secondary" type="button">Upload PDF</button>
+              <div>
+                <label for="uploadDomain">
+                  Legal Domain
+                </label>
+                <select id="uploadDomain" aria-label="Select legal domain for PDF"></select>
+              </div>
+              <div>
+                <label for="uploadFile">
+                  Choose PDF file
+                </label>
+                <input id="uploadFile" type="file" accept="application/pdf" aria-label="Select PDF file to upload" />
+              </div>
+              <button id="uploadBtn" class="btn-secondary" type="button" aria-label="Upload PDF to knowledge base">Upload PDF</button>
             </div>
             <p id="uploadStatus" class="muted">No upload yet.</p>
           </div>

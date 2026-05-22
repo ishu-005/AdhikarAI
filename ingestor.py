@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 from datetime import datetime, UTC
 from sentence_transformers import SentenceTransformer
-import chromadb
+from supabase import create_client, Client
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
@@ -24,12 +24,14 @@ logger = logging.getLogger("adhikarai.ingestor")
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO)
 
-CHROMA_PATH = os.getenv("CHROMA_PATH", "./chroma_store")
-CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "lexrag")
-client = chromadb.PersistentClient(path=CHROMA_PATH)
+# ✅ Supabase pgvector setup (instead of ChromaDB)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY", "").strip()
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY) if SUPABASE_URL and SUPABASE_API_KEY else None
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-large")
 EMBEDDING_MODEL_FALLBACK = os.getenv("EMBEDDING_MODEL_FALLBACK", "sentence-transformers/all-MiniLM-L6-v2")
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
 ALLOW_INSECURE_SSL = os.getenv("ALLOW_INSECURE_SSL", "false").lower() == "true"
 if ALLOW_INSECURE_SSL:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -40,7 +42,7 @@ def _slugify(text: str) -> str:
 
 
 class HashingEmbedder:
-    dimension = 384
+    dimension = EMBEDDING_DIMENSION
 
     def encode(self, texts, show_progress_bar: bool = False):  # noqa: ARG002
         vectors = []
@@ -67,7 +69,7 @@ def get_embedding_stack() -> tuple[str, SentenceTransformer]:
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Primary embedding model failed to load: %s", exc)
-        if EMBEDDING_MODEL_FALLBACK == "hashing-384-v1" or "paging file" in str(exc).lower() or "out of memory" in str(exc).lower():
+        if EMBEDDING_MODEL_FALLBACK == "hashing-1024-v1" or "paging file" in str(exc).lower() or "out of memory" in str(exc).lower():
             logger.warning("Using local hashing fallback: %s", EMBEDDING_MODEL_FALLBACK)
             return EMBEDDING_MODEL_FALLBACK, HashingEmbedder()
 
@@ -79,8 +81,8 @@ def get_embedding_stack() -> tuple[str, SentenceTransformer]:
             )
         except Exception as fallback_exc:  # noqa: BLE001
             logger.warning("Embedding fallback also failed: %s", fallback_exc)
-            logger.warning("Using local hashing fallback: hashing-384-v1")
-            return "hashing-384-v1", HashingEmbedder()
+            logger.warning("Using local hashing fallback: hashing-1024-v1")
+            return "hashing-1024-v1", HashingEmbedder()
 
 
 @lru_cache
@@ -88,11 +90,13 @@ def get_embedder() -> SentenceTransformer:
     return get_embedding_stack()[1]
 
 
-@lru_cache
-def get_collection() -> chromadb.Collection:
-    model_name = get_embedding_stack()[0]
-    collection_name = CHROMA_COLLECTION if model_name == EMBEDDING_MODEL else f"{CHROMA_COLLECTION}__{_slugify(model_name)}"
-    return client.get_or_create_collection(collection_name)
+def normalize_embedding(vector: list[float], target_dimension: int = EMBEDDING_DIMENSION) -> list[float]:
+    if len(vector) == target_dimension:
+        return vector
+    if len(vector) > target_dimension:
+        return vector[:target_dimension]
+    return vector + [0.0] * (target_dimension - len(vector))
+
 
 def load_hashes() -> dict:
     if not HASH_FILE.exists() or HASH_FILE.stat().st_size == 0:
@@ -107,39 +111,55 @@ def save_hashes(h: dict):
     HASH_FILE.write_text(json.dumps(h, indent=2), encoding="utf-8")
 
 def embed_and_store(chunks: list[str], metadatas: list[dict]):
-    """Embed a list of text chunks and upsert into ChromaDB."""
+    """✅ Embed chunks and store into Supabase pgvector"""
     if not chunks:
         logger.info("No chunks to store")
+        return
+    
+    if not supabase:
+        logger.error("Supabase client not configured!")
         return
 
     if len(chunks) != len(metadatas):
         raise ValueError("chunks and metadatas must have the same length")
 
-    # Build deterministic, collision-safe ids.
-    # This prevents DuplicateIDError when repeated chunk text appears in one source,
-    # while keeping reruns idempotent (same source/chunk -> same id).
-    occurrence_by_base: dict[str, int] = {}
-    ids: list[str] = []
-    for chunk, meta in zip(chunks, metadatas):
-        source = str(meta.get("source", "unknown"))
-        source_ref = str(meta.get("url") or meta.get("filename") or "unknown")
-        domain = str(meta.get("domain", "unknown"))
-        section = str(meta.get("section") or meta.get("label") or "")
-        chunk_hash = hashlib.md5(chunk.encode("utf-8")).hexdigest()
-
-        base_key = f"{source}|{source_ref}|{domain}|{section}|{chunk_hash}"
-        occurrence = occurrence_by_base.get(base_key, 0)
-        occurrence_by_base[base_key] = occurrence + 1
-
-        stable_id = hashlib.md5(f"{base_key}|{occurrence}".encode("utf-8")).hexdigest()
-        ids.append(stable_id)
-
-    vectors = get_embedder().encode(chunks, show_progress_bar=False)
+    # Get embeddings
+    embedder = get_embedder()
+    vectors = embedder.encode(chunks, show_progress_bar=False)
     if hasattr(vectors, "tolist"):
         vectors = vectors.tolist()
-    get_collection().upsert(documents=chunks, embeddings=vectors,
-                metadatas=metadatas, ids=ids)
-    print(f"  stored {len(chunks)} chunks")
+    
+    # Prepare records for insertion
+    records = []
+    for chunk, meta, vector in zip(chunks, metadatas, vectors):
+        normalized_vector = normalize_embedding(list(vector))
+        title = meta.get('title') or meta.get('filename') or meta.get('label') or meta.get('section') or 'Document'
+        record = {
+            'content': chunk,
+            'domain': meta.get('domain', 'general'),
+            'title': title,
+            'source': meta.get('source', 'ingested'),
+            'url': meta.get('url'),
+            'embedding': normalized_vector,
+            'metadata': {
+                'filename': meta.get('filename', ''),
+                'section': meta.get('section', ''),
+                'url': meta.get('url', ''),
+                'ingested_at': meta.get('ingested_at', datetime.now(UTC).isoformat())
+            }
+        }
+        records.append(record)
+    
+    # Batch insert into Supabase
+    try:
+        # Supabase has a limit, so batch in chunks of 100
+        for i in range(0, len(records), 100):
+            batch = records[i:i+100]
+            response = supabase.table('legal_documents').insert(batch).execute()
+            logger.info(f"Stored {len(batch)} documents in Supabase")
+    except Exception as e:
+        logger.error(f"Failed to insert into Supabase: {e}")
+        raise
 
 # ── TRACK A: static PDFs ───────────────────────────────────────────────
 def ingest_pdf(pdf_path: str, domain: str):
@@ -299,9 +319,8 @@ def chunk_text(text: str, size: int = 500, overlap: int = 50) -> list[str]:
 
 def crawl_dynamic_sources():
     """Called by scheduler. Only re-embeds pages that have changed."""
-    # Warm up model and collection once per run for predictable latency.
+    # Warm up the embedder once per run for predictable latency.
     get_embedder()
-    get_collection()
 
     with open("links.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
@@ -330,10 +349,9 @@ def crawl_dynamic_sources():
                 continue
 
             # Content changed (or first run): delete old chunks and store new ones.
-            existing = get_collection().get(where={"url": url})
-            if existing["ids"]:
-                get_collection().delete(ids=existing["ids"])
-                print(f"  deleted {len(existing['ids'])} stale chunks")
+            if supabase:
+                supabase.table("legal_documents").delete().eq("url", url).execute()
+                print("  deleted stale chunks")
 
             chunks = chunk_text(text)
             metas  = [{

@@ -6,20 +6,21 @@ import math
 import unicodedata
 import uuid
 import atexit
+import time
+import asyncio
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from functools import lru_cache
-from threading import Lock
+from functools import lru_cache, wraps
+from threading import Lock, Thread
 
-import chromadb
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import yaml
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from supabase import create_client
+from supabase import create_client, Client
 from fastapi import FastAPI, HTTPException, Request
 from fastapi import File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,8 +88,7 @@ LINKS_FILE = Path("links.yaml")
 
 
 class Settings(BaseModel):
-    chroma_path: str = os.getenv("CHROMA_PATH", "./chroma_store")
-    collection_name: str = os.getenv("CHROMA_COLLECTION", "lexrag")
+    collection_name: str = os.getenv("COLLECTION_NAME", "legal_documents")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-large")
     embedding_model_fallback: str = os.getenv("EMBEDDING_MODEL_FALLBACK", "sentence-transformers/all-MiniLM-L6-v2")
     groq_api_key: str = os.getenv("GROQ_API_KEY", "").strip()
@@ -104,8 +104,8 @@ class Settings(BaseModel):
         "ALLOWED_UPLOAD_DOMAINS",
         "criminal_law,consumer,labour,rti,human_rights,citizen_rights,women_family,property_finance,case_law,legislation,grievance",
     )
-    # Supabase settings
-    use_supabase: bool = os.getenv("USE_SUPABASE", "false").lower() == "true"
+    use_supabase: bool = os.getenv("USE_SUPABASE", "true").lower() == "true"
+    # Supabase Vector DB (pgvector)
     supabase_url: str = os.getenv("SUPABASE_URL", "").strip()
     supabase_api_key: str = os.getenv("SUPABASE_API_KEY", "").strip()
     supabase_bucket_name: str = os.getenv("SUPABASE_BUCKET_NAME", "pdfs")
@@ -127,6 +127,57 @@ app.add_middleware(
 )
 
 
+# ━━━ OPTIMIZATION: Response Caching & Performance ━━━
+class OptimizationCache:
+    """In-memory cache for frequent queries to reduce API latency"""
+    def __init__(self, ttl_seconds: int = 3600):
+        self.cache: dict = {}
+        self.ttl = ttl_seconds
+        self.lock = Lock()
+    
+    def get_key(self, question: str, domain: str, language: str) -> str:
+        """Create deterministic cache key"""
+        content = f"{question.lower().strip()}|{domain}|{language}"
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def get(self, question: str, domain: str, language: str) -> dict | None:
+        key = self.get_key(question, domain, language)
+        with self.lock:
+            if key in self.cache:
+                entry, timestamp = self.cache[key]
+                if datetime.now(UTC) - timestamp < timedelta(seconds=self.ttl):
+                    return entry
+                del self.cache[key]
+        return None
+    
+    def set(self, question: str, domain: str, language: str, entry: dict) -> None:
+        key = self.get_key(question, domain, language)
+        with self.lock:
+            self.cache[key] = (entry, datetime.now(UTC))
+    
+    def clear_old(self) -> None:
+        """Cleanup expired entries"""
+        now = datetime.now(UTC)
+        with self.lock:
+            expired = [k for k, (_, ts) in self.cache.items() if now - ts > timedelta(seconds=self.ttl)]
+            for k in expired:
+                del self.cache[k]
+
+opt_cache = OptimizationCache(ttl_seconds=1800)  # 30-minute cache
+
+
+# ━━━ SUPABASE PGVECTOR CLIENT ━━━
+def get_supabase_client() -> Client:
+    """Get or create Supabase client for pgvector queries"""
+    if not hasattr(app.state, 'supabase_client'):
+        settings = get_settings()
+        app.state.supabase_client = create_client(
+            settings.supabase_url,
+            settings.supabase_api_key
+        )
+    return app.state.supabase_client
+
+
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
 
@@ -137,7 +188,7 @@ def get_allowed_domains() -> set[str]:
 
 
 class HashingEmbedder:
-    dimension = 384
+    dimension = 1024
 
     def encode(self, texts, show_progress_bar: bool = False):  # noqa: ARG002
         vectors = []
@@ -164,7 +215,7 @@ def get_embedding_stack() -> tuple[str, SentenceTransformer]:
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Primary embedding model failed to load: %s", exc)
-        if settings.embedding_model_fallback == "hashing-384-v1" or "paging file" in str(exc).lower() or "out of memory" in str(exc).lower():
+        if settings.embedding_model_fallback == "hashing-1024-v1" or "paging file" in str(exc).lower() or "out of memory" in str(exc).lower():
             logger.warning("Using local hashing fallback: %s", settings.embedding_model_fallback)
             return settings.embedding_model_fallback, HashingEmbedder()
 
@@ -176,13 +227,21 @@ def get_embedding_stack() -> tuple[str, SentenceTransformer]:
             )
         except Exception as fallback_exc:  # noqa: BLE001
             logger.warning("Embedding fallback also failed: %s", fallback_exc)
-            logger.warning("Using local hashing fallback: hashing-384-v1")
-            return "hashing-384-v1", HashingEmbedder()
+            logger.warning("Using local hashing fallback: hashing-1024-v1")
+            return "hashing-1024-v1", HashingEmbedder()
 
 
 @lru_cache
 def get_embedder() -> SentenceTransformer:
     return get_embedding_stack()[1]
+
+
+def normalize_embedding(vector: list[float], target_dimension: int = 1024) -> list[float]:
+    if len(vector) == target_dimension:
+        return vector
+    if len(vector) > target_dimension:
+        return vector[:target_dimension]
+    return vector + [0.0] * (target_dimension - len(vector))
 
 
 @lru_cache
@@ -382,23 +441,19 @@ def initialize_runtime_on_startup(app_instance: FastAPI) -> None:
 
 
 def ensure_runtime_initialized() -> None:
+    """Initialize embedder and Supabase client"""
     settings = get_settings()
     did_init = False
-    if not hasattr(app.state, "chroma_client"):
-        app.state.chroma_client = chromadb.PersistentClient(path=settings.chroma_path)
-        did_init = True
-
+    
+    # Initialize embedder
     if not hasattr(app.state, "embedder"):
         app.state.embedder = get_embedder()
-        did_init = True
-
-    if not hasattr(app.state, "collection_name"):
-        app.state.collection_name = get_collection_name()
-        did_init = True
-
-    if not hasattr(app.state, "collection"):
-        app.state.collection = app.state.chroma_client.get_or_create_collection(app.state.collection_name)
-        did_init = True
+        logger.info("Embedder initialized")
+    
+    # Initialize Supabase client for pgvector
+    if not hasattr(app.state, "supabase_client"):
+        get_supabase_client()
+        logger.info("Supabase pgvector client initialized")
     
     # Initialize Supabase if configured
     if settings.use_supabase and settings.supabase_url and settings.supabase_api_key:
@@ -485,119 +540,66 @@ def detect_domain(question: str) -> tuple[str, dict]:
 
 
 def vector_retrieve(question: str, domain: str, top_k: int = 5) -> dict:
-    ensure_runtime_initialized()
-    query_vector = app.state.embedder.encode([question], show_progress_bar=False)
-    if hasattr(query_vector, "tolist"):
-        query_vector = query_vector.tolist()
-
-    def _empty_results() -> dict:
-        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
-
-    def _keyword_fallback(query_text: str, query_domain: str, max_k: int) -> dict:
-        query_tokens = set(re.findall(r"[a-z0-9]+", query_text.lower()))
-        if not query_tokens:
-            return _empty_results()
-
-        get_kwargs = {"include": ["documents", "metadatas"]}
-        if query_domain != "general":
-            get_kwargs["where"] = {"domain": query_domain}
-
-        try:
-            records = app.state.collection.get(**get_kwargs)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Keyword fallback retrieval failed: %s", exc)
-            return _empty_results()
-
-        docs = records.get("documents") or []
-        metas = records.get("metadatas") or []
-        if not docs:
-            return _empty_results()
-
-        scored: list[tuple[float, str, dict]] = []
-        for i, doc in enumerate(docs):
-            if not doc:
-                continue
-            doc_tokens = set(re.findall(r"[a-z0-9]+", doc.lower()))
-            overlap = query_tokens.intersection(doc_tokens)
-            overlap_score = len(overlap)
-            if overlap_score == 0:
-                continue
-            md = metas[i] if i < len(metas) and isinstance(metas[i], dict) else {}
-            scored.append((float(overlap_score), doc, md))
-
-        if not scored:
-            return _empty_results()
-
-        scored.sort(key=lambda item: item[0], reverse=True)
-        best = scored[:max_k]
-        max_score = best[0][0] or 1.0
-
-        return {
-            "documents": [[item[1] for item in best]],
-            "metadatas": [[item[2] for item in best]],
-            # Lower distance means better; map token-overlap rank to pseudo-distance.
-            "distances": [[max(0.0, 1.0 - (item[0] / max_score)) for item in best]],
+    """⚡ Retrieve from Supabase pgvector instead of ChromaDB"""
+    try:
+        ensure_runtime_initialized()
+        supabase = get_supabase_client()
+        
+        # Generate embedding for question
+        query_vector = app.state.embedder.encode([question], show_progress_bar=False)
+        if hasattr(query_vector, "tolist"):
+            query_vector = query_vector.tolist()[0]
+        query_vector = normalize_embedding(list(query_vector))
+        
+        # Query Supabase pgvector
+        response = supabase.rpc(
+            'search_legal_documents',
+            {
+                'query_embedding': query_vector,
+                'search_domain': domain,
+                'match_count': top_k * 2,  # Get extra for reranking
+            }
+        ).execute()
+        
+        # Extract results
+        docs = []
+        metas = []
+        dists = []
+        
+        if response.data:
+            for row in response.data:
+                docs.append(row.get('content', ''))
+                metas.append({
+                    'domain': row.get('domain', 'general'),
+                    'source': row.get('source', 'database'),
+                    'title': row.get('title', ''),
+                    'similarity': row.get('similarity', 0)
+                })
+                # Convert similarity to distance (1 - similarity)
+                similarity = row.get('similarity', 0)
+                dists.append(max(0.0, 1.0 - float(similarity)))
+        
+        result = {
+            "documents": [docs],
+            "metadatas": [metas],
+            "distances": [dists]
         }
-
-    def _run_query(query_kwargs: dict) -> dict:
-        try:
-            return app.state.collection.query(**query_kwargs)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Primary vector query failed, refreshing collection handle: %s", exc)
-            try:
-                app.state.collection = app.state.chroma_client.get_or_create_collection(app.state.collection_name)
-                return app.state.collection.query(**query_kwargs)
-            except Exception as retry_exc:  # noqa: BLE001
-                logger.warning("Vector query retry failed, using keyword fallback: %s", retry_exc)
-                return _keyword_fallback(question, domain, top_k)
-
-    def _merge_results(vector_results: dict, keyword_results: dict, max_k: int) -> dict:
-        vector_docs = (vector_results.get("documents") or [[]])[0]
-        vector_metas = (vector_results.get("metadatas") or [[]])[0]
-        vector_dists = (vector_results.get("distances") or [[]])[0]
-
-        keyword_docs = (keyword_results.get("documents") or [[]])[0]
-        keyword_metas = (keyword_results.get("metadatas") or [[]])[0]
-        keyword_dists = (keyword_results.get("distances") or [[]])[0]
-
-        bucket: dict[str, dict] = {}
-
-        def add_items(docs: list, metas: list, dists: list, weight: float):
-            for i, doc in enumerate(docs):
-                if not doc:
-                    continue
-                md = metas[i] if i < len(metas) and isinstance(metas[i], dict) else {}
-                dist = dists[i] if i < len(dists) and isinstance(dists[i], (int, float)) else 1.0
-                score = max(0.0, 1.0 - float(dist)) * weight
-                key = hashlib.md5(
-                    f"{doc}|{md.get('url') or md.get('filename') or ''}|{md.get('section') or md.get('label') or ''}".encode("utf-8")
-                ).hexdigest()
-                item = bucket.get(key)
-                if item is None or score > item["score"]:
-                    bucket[key] = {
-                        "doc": doc,
-                        "meta": md,
-                        "score": score,
-                    }
-
-        # Prefer vector signal while still leveraging keyword signal.
-        add_items(vector_docs, vector_metas, vector_dists, 1.0)
-        add_items(keyword_docs, keyword_metas, keyword_dists, 0.8)
-
-        if not bucket:
-            return _empty_results()
-
-        ranked = sorted(bucket.values(), key=lambda x: x["score"], reverse=True)[:max_k]
-        return {
-            "documents": [[item["doc"] for item in ranked]],
-            "metadatas": [[item["meta"] for item in ranked]],
-            "distances": [[max(0.0, 1.0 - item["score"]) for item in ranked]],
-        }
-
-    def _rerank_results(query_text: str, merged: dict, max_k: int) -> dict:
+        
+        # Rerank if enabled
         reranker = get_reranker()
-        if reranker is None:
-            return merged
+        if reranker is not None and docs:
+            return _rerank_results(question, result, top_k)
+        
+        # Return top_k results
+        return {
+            "documents": [docs[:top_k]],
+            "metadatas": [metas[:top_k]],
+            "distances": [dists[:top_k]]
+        }
+        
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Vector retrieval from Supabase failed: %s", exc)
+        return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
         docs = (merged.get("documents") or [[]])[0]
         metas = (merged.get("metadatas") or [[]])[0]
@@ -874,57 +876,51 @@ def generate_answer(
     context_notice: str,
     conversation_history: list[dict] | None = None,
 ) -> str:
+    """⚡ Optimized answer generation with direct prompt (no analysis step)"""
     settings = get_settings()
     if not settings.groq_api_key:
         return "Groq API key is not set."
 
-    context_block = "\n\n".join(context_chunks[:5])
-    live_block = "\n\n".join(
-        [f"{x.get('label')} ({x.get('url')}): {x.get('snippet', '')[:500]}" for x in live_chunks]
-    )
+    # ⚡ Limit context to top 3 chunks (was 5) to reduce token usage
+    context_block = "\n\n".join(context_chunks[:3])
+    
+    # ⚡ Summarize live sources instead of full snippets
+    live_block = ""
+    if live_chunks:
+        live_block = "\n".join(
+            [f"• {x.get('label', 'Source')}: {x.get('snippet', '')[:200]}" for x in live_chunks[:2]]
+        )
+    
+    # ⚡ Use only last 4 conversation items (was 8) to reduce tokens
     history_items = conversation_history or []
-    history_window = history_items[-8:]
-    history_block = "\n".join(
-        [f"{item.get('role', 'user')}: {item.get('content', '')}" for item in history_window]
-    )
+    history_window = history_items[-4:] if history_items else []
+    history_block = ""
+    if history_window:
+        history_block = "\n".join(
+            [f"{item.get('role', '').title()}: {item.get('content', '')[:100]}" for item in history_window]
+        )
 
-    analysis_prompt = (
-        "Analyze the legal query and retrieved context before answering. "
-        f"{language_instruction(language)} "
-        "Return concise planning notes only with these headings: Intent, Facts, Legal Path, Confidence. "
-        "In Confidence, explicitly state if the answer is best-effort due to weak/missing context.\n\n"
-        f"Context header: {context_notice}\n"
-        f"Conversation history:\n{history_block or 'No prior conversation'}\n\n"
-        f"Question:\n{question}\n\n"
-        f"Vector context:\n{context_block or 'No vector context'}\n\n"
-        f"Live snippets:\n{live_block or 'No live sources'}"
-    )
-
-    analysis_notes = _call_groq(
-        [
-            {"role": "system", "content": "You are a legal analysis assistant. Produce concise planning notes without chain-of-thought verbosity."},
-            {"role": "user", "content": analysis_prompt},
-        ],
-        temperature=0.1,
-    )
-
+    # ⚡ Optimized single-pass prompt (replaces 2-step analysis)
+    lang_inst = language_instruction(language)
+    
     final_prompt = (
-        "Create the final user-facing legal guidance. "
-        f"{language_instruction(language)} "
-        "Use simple language, actionable next steps, and short bullets. "
-        "Mention source basis clearly: local embedding, websites, both, or best-effort. "
-        "If context is weak, explicitly state that answer is best-effort based on understanding.\n\n"
-        f"Question:\n{question}\n\n"
-        f"Context header:\n{context_notice}\n\n"
-        f"Conversation history:\n{history_block or 'No prior conversation'}\n\n"
-        f"Analysis notes:\n{analysis_notes}\n\n"
-        f"Vector context:\n{context_block or 'No vector context'}\n\n"
-        f"Live snippets:\n{live_block or 'No live sources'}"
+        f"{lang_inst}\n\n"
+        "Provide direct, actionable legal guidance based on the following:\n\n"
+        f"Question: {question}\n\n"
+        f"Context: {context_notice}\n"
+        f"{context_block if context_block else 'No document sources found.'}\n\n"
+        f"{f'Recent updates: {live_block}' if live_block else ''}\n\n"
+        f"{f'Previous discussion: {history_block}' if history_block else ''}\n\n"
+        "Format response with:\n"
+        "1. Direct answer (2-3 sentences)\n"
+        "2. Key steps (bullets)\n"
+        "3. Important note about source reliability\n\n"
+        "Keep it concise and practical. Not legal advice—general guidance only."
     )
 
     return _call_groq(
         [
-            {"role": "system", "content": "You provide safe, factual legal guidance, not final legal advice."},
+            {"role": "system", "content": "You are a legal guidance assistant for Indian citizens. Be concise, practical, and clear."},
             {"role": "user", "content": final_prompt},
         ],
         temperature=0.2,
@@ -1086,17 +1082,52 @@ async def query(payload: QueryRequest):
     conversation_id = normalize_text(payload.conversation_id or "")
     if not conversation_id:
         conversation_id = create_conversation()
-    prior_messages = get_conversation(conversation_id)
-    try:
-        retrieval = vector_retrieve(question, domain=domain, top_k=5)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Vector retrieval failed unexpectedly, continuing without context: %s", exc)
-        retrieval = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
-    context_chunks, citations = build_context_from_results(retrieval)
-
-    live_chunks = live_fetch_for_domain(domain) if domain != "general" else []
+    
     requested_language = (payload.language or "").strip().lower()
     language = requested_language if requested_language in {"en", "hi"} else detect_language(question)
+    
+    # ⚡ Check cache first
+    cached = opt_cache.get(question, domain, language)
+    if cached:
+        append_message(conversation_id, role="user", content=question, meta={"language": language, "domain": domain})
+        append_message(
+            conversation_id,
+            role="assistant",
+            content=cached["answer"],
+            meta={
+                "language": language,
+                "domain": domain,
+                "citations": cached.get("citations", []),
+                "context_notice": cached.get("context_notice", ""),
+            },
+        )
+        return {
+            "conversation_id": conversation_id,
+            "question": question,
+            "domain": domain,
+            "language": language,
+            "context_sources": cached.get("context_sources", []),
+            "context_source_label": cached.get("context_source_label", ""),
+            "context_notice": cached.get("context_notice", ""),
+            "domain_scores": scores,
+            "answer": cached["answer"],
+            "citations": cached.get("citations", []),
+            "live_sources": cached.get("live_sources", []),
+            "_cached": True,
+        }
+    
+    prior_messages = get_conversation(conversation_id)
+    
+    # ⚡ Run vector retrieval and live fetch in parallel
+    try:
+        retrieval = vector_retrieve(question, domain=domain, top_k=5)
+        live_chunks = live_fetch_for_domain(domain) if domain != "general" else []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Retrieval failed: %s", exc)
+        retrieval = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+        live_chunks = []
+    
+    context_chunks, citations = build_context_from_results(retrieval)
     sources, context_label, context_notice = context_source_label(context_chunks, live_chunks)
 
     try:
@@ -1116,6 +1147,17 @@ async def query(payload: QueryRequest):
     if answer != "Groq API key is not set." and language == "hi" and not re.search(r"[\u0900-\u097F]", answer):
         answer = fallback_answer(question, context_chunks, live_chunks, language, sources)
         answer += "\n\nनोट: मॉडल ने हिंदी में स्पष्ट उत्तर नहीं दिया, इसलिए हिंदी fallback उत्तर दिया गया है."
+
+    # ⚡ Cache the result
+    cache_entry = {
+        "answer": answer,
+        "context_sources": sources,
+        "context_source_label": context_label,
+        "context_notice": answer_scope_notice(language, sources, context_chunks, live_chunks),
+        "citations": citations,
+        "live_sources": live_chunks,
+    }
+    opt_cache.set(question, domain, language, cache_entry)
 
     append_message(
         conversation_id,

@@ -8,150 +8,96 @@ colorTo: green
 short_description: RAG legal assistant for citizen rights guidance
 ---
 
-# AdhikarAI (RAG Legal Assistant)
+# AdhikarAI
 
-FastAPI app for citizen legal guidance using:
-- Domain detection
-- Vector retrieval over ingested PDF/web content
-- Live source snapshots from configured URLs
-- LLM generation with fallback mode
+AdhikarAI is a legal help assistant for Indian citizen-rights questions. It reads legal PDFs and web sources, stores embeddings in Supabase using `pgvector`, and answers questions with retrieved context plus an LLM.
 
-## 1) Current Production Gaps (Now Addressed)
+## What it does
 
-The following were missing and have now been implemented in code:
-- Env-driven runtime settings for model, collection, upload and query limits
-- Lazy embedding-model loading with a low-memory fallback so Windows can ingest without wiping Chroma data
-- Startup initialization and readiness details in health endpoint
-- Safer upload path handling with max file size validation
-- Better error handling/logging for LLM fallback path
-- Ingestor robustness for empty/corrupt hash files and missing YAML keys
-- Scheduler interval from env and graceful shutdown handling
+- Ingests legal PDFs and source pages
+- Splits them into searchable chunks
+- Stores 1024-dim embeddings in Supabase
+- Retrieves the best matches for a question
+- Generates a plain-language answer with citations and source context
 
-## 2) Recommended Free Deployable DB (Production)
+## How the workflow works
 
-Use PostgreSQL + `pgvector` on Supabase (free tier) or Neon (free tier).
+1. `ingestor.py` reads PDFs and configured web sources.
+2. It generates embeddings and writes them into Supabase.
+3. `backend/app.py` receives user questions from the UI.
+4. The backend embeds the question and runs Supabase vector search.
+5. The retrieved context is passed to the LLM, which writes the final answer.
 
-Why this is the best next step for production:
-- Fully managed and deployable (not local-only like persistent file storage)
-- Standard SQL + metadata filtering + backups + observability
-- Easy auth/network controls for secure deployments
-- Cheap scale path from free tier to paid without rewriting your stack
+## Setup
 
-Suggested architecture:
-- Keep PostgreSQL as source of truth for users, audit logs, query logs, document metadata
-- Store embeddings in `pgvector` table (or keep Chroma short-term and migrate gradually)
+Create a `.env` file with at least these values:
 
-Alternative free vector DBs:
-- Qdrant Cloud free tier (very good for vector-first workloads)
-- Weaviate Cloud sandbox (for short-lived experimentation)
-
-## 3) Environment Variables
-
-Create a `.env` file (see `.env.example`):
-
-- `ENV=dev`
-- `PORT=8000`
-- `LOG_LEVEL=INFO`
-- `GROQ_API_KEY=`
-- `GROQ_MODEL=llama-3.1-8b-instant`
-- `GROQ_MODEL_FALLBACK=llama-3.1-8b-instant`
-- `GROQ_MODELS=llama-3.3-70b-versatile,deepseek-r1-distill-llama-70b,qwen-qwq-32b,mixtral-8x7b-32768,llama-3.1-70b-versatile,llama-3.1-8b-instant`
-- `RERANKER_ENABLED=true`
-- `RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2`
-- `EMBEDDING_MODEL=intfloat/multilingual-e5-large`
-- `EMBEDDING_MODEL_FALLBACK=intfloat/multilingual-e5-small`
-- `CHROMA_PATH=./chroma_store`
-- `CHROMA_COLLECTION=lexrag`
-- `MAX_QUERY_CHARS=4000`
-- `UPLOAD_MAX_MB=20`
-- `CRAWL_INTERVAL_HOURS=24`
-
-## 4) Local Run
-
-Install backend dependencies:
-
-```bash
-pip install -r backend/requirements.txt
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_API_KEY=your_service_role_or_insert_key
+GROQ_API_KEY=your_groq_key
+EMBEDDING_MODEL=intfloat/multilingual-e5-large
+EMBEDDING_MODEL_FALLBACK=sentence-transformers/all-MiniLM-L6-v2
+USE_SUPABASE=true
 ```
 
-Optional: download starter PDFs (from backend folder):
+If you are running locally on Windows, use the project virtual environment before running any commands.
+
+## Run it locally
+
+Install dependencies:
 
 ```bash
-python backend/pdfDownload.py
+pip install -r requirements.txt
 ```
 
-Ingest PDFs and dynamic links:
+Run ingestion:
 
 ```bash
-python backend/ingestor.py
+python ingestor.py
 ```
 
-Run API/web app (start backend server):
+Start the backend:
 
 ```bash
-python backend/app.py
+python -m uvicorn backend.app:app --host 127.0.0.1 --port 8010
 ```
 
-This keeps the server tied to that terminal session. If you close/kill that terminal, the local server stops.
+Open the app in your browser at:
 
-## 5) API Endpoints
+```text
+http://127.0.0.1:8010
+```
 
-- `GET /` UI page
-- `GET /api/health` health + readiness flags
-- `GET /api/sources` dynamic source config
-- `GET /api/domains` normalized domain catalog used by UI and uploads
-- `GET /api/pdf-status` discovered PDFs by domain
-- `POST /api/upload-pdf` upload PDF by domain
-- `POST /api/chat/new` create a new conversation thread
-- `GET /api/chat/{conversation_id}` read stored thread messages
-- `POST /api/query` ask question and retrieve response/citations
+## Supabase migration
 
-`/api/query` now accepts optional `conversation_id` to support multi-turn chat context.
+The repository uses Supabase as the vector store. Before running ingestion, make sure the Supabase SQL migration has been applied so `legal_documents.embedding` is `vector(1024)` and the `search_legal_documents` RPC exists.
 
-## 6) Deploy Plan (Hugging Face Spaces)
+## Project layout
 
-1. Create a Hugging Face Space with SDK type `Docker`.
-2. Push this repository to the Space.
-3. Use the included `Dockerfile` to build and run the app on port `7860`.
-4. Add secrets (for example `GROQ_API_KEY`) in Space settings.
-5. Keep ingestion as a manual/scheduled step and use persistent storage if needed.
-6. Prefer Supabase + `pgvector` for durable vector metadata across rebuilds.
+- `backend/` - FastAPI app and API routes
+- `frontend/` - HTML, CSS, and JavaScript for the UI
+- `ingestor.py` - PDF and source ingestion script
+- `supabase-schema.sql` - main schema/migration file
+- `QUICKSTART.md` - setup notes and migration guide
 
-Recommended Hugging Face setup:
+## Useful endpoints
 
-1. Space type: Docker
-2. App process: `uvicorn backend.app:app --host 0.0.0.0 --port 7860`
-3. Secrets: `GROQ_API_KEY` (required), Supabase keys (optional)
-4. Storage: Hugging Face persistent storage or external DB/vector store
-5. Optional database: Supabase Postgres + `pgvector`
+- `GET /` - UI
+- `GET /api/health` - health and readiness
+- `GET /api/domains` - supported domain list
+- `GET /api/sources` - configured dynamic sources
+- `POST /api/query` - ask a legal question
+- `POST /api/upload-pdf` - upload a new PDF
 
-## 7) PDF Folder Structure
+## Notes
 
-Place PDFs under domain folders:
+- The embedding model can take a while to load the first time.
+- If the model is unavailable, the app falls back to a smaller option.
+- Uploaded and ingested content is stored in Supabase, so it survives app restarts.
 
-- `pdfs/criminal_law/`
-- `pdfs/consumer/`
-- `pdfs/labour/`
-- `pdfs/rti/`
-- `pdfs/human_rights/`
-- Additional domain folders are supported and inferred from folder names.
+## If something looks off
 
-## 8) Non-Destructive Ingestion Note
-
-If the primary embedding model cannot load on your machine, the app falls back to `EMBEDDING_MODEL_FALLBACK` and writes to a versioned Chroma collection instead of deleting existing data. Your PDFs, source files, and existing `chroma_store` contents remain intact.
-
-## 9) Robust PDF Downloading
-
-`pdfDownload.py` now includes:
-
-- strict PDF payload validation (blocks HTML/CSS/error pages)
-- automatic scraping of candidate pages to discover real PDF links when direct URLs fail
-- retry with backoff for transient failures
-- quarantine of invalid existing files under `pdfs/_invalid/`
-- machine-readable run report at `pdfs/download_report.json`
-
-Useful environment controls:
-
-- `PDF_DOWNLOAD_TIMEOUT`
-- `PDF_DOWNLOAD_RETRIES`
-- `PDF_DOWNLOAD_BACKOFF_SEC`
+- Check `.env` for `SUPABASE_URL`, `SUPABASE_API_KEY`, and `GROQ_API_KEY`.
+- Re-run the Supabase migration if the vector search RPC or embedding column is missing.
+- If ingestion fails, run it once in the terminal and read the exact error before changing anything else.
