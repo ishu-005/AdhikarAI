@@ -1,0 +1,36 @@
+# Render Blueprint for the AdhikarAI FastAPI backend (API only).
+# The Next.js UI deploys separately on Vercel and calls this service via
+# NEXT_PUBLIC_API_BASE. Deploy: Render Dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: adhikarai-api
+    runtime: python
+    plan: free
+    region: singapore          # closest free region to India
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: USE_SUPABASE
+        value: "true"
+      - key: EMBEDDING_PROVIDER
+        value: cohere
+      # Secrets — set these in the Render dashboard (sync:false keeps them out of git).
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: JINA_API_KEY
+        sync: false
+      # Set to your Vercel URL once the frontend is deployed (enables CORS),
+      # e.g. https://adhikarai.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false

@@ -61,6 +61,7 @@ RETURNS TABLE(
   content TEXT,
   domain TEXT,
   source TEXT,
+  metadata JSONB,
   similarity FLOAT8
 ) AS $$
 BEGIN
@@ -71,6 +72,7 @@ BEGIN
     legal_documents.content,
     legal_documents.domain,
     legal_documents.source,
+    legal_documents.metadata,
     1 - (legal_documents.embedding <=> query_embedding) as similarity
   FROM legal_documents
   WHERE 
@@ -170,9 +172,87 @@ CREATE TRIGGER update_conversations_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
--- 12. Verify setup
+-- 12. Full-text (keyword / BM25-style) search function for hybrid retrieval
+CREATE OR REPLACE FUNCTION fulltext_search_legal_documents(
+  query_text TEXT,
+  search_domain TEXT DEFAULT 'general',
+  match_count INT DEFAULT 5
+)
+RETURNS TABLE(
+  id UUID,
+  title TEXT,
+  content TEXT,
+  domain TEXT,
+  source TEXT,
+  metadata JSONB,
+  similarity FLOAT8
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    legal_documents.id,
+    legal_documents.title,
+    legal_documents.content,
+    legal_documents.domain,
+    legal_documents.source,
+    legal_documents.metadata,
+    ts_rank(
+      to_tsvector('english', legal_documents.content),
+      plainto_tsquery('english', query_text)
+    )::FLOAT8 AS similarity
+  FROM legal_documents
+  WHERE
+    (search_domain = 'general' OR legal_documents.domain = search_domain OR legal_documents.domain = 'general')
+    AND to_tsvector('english', legal_documents.content) @@ plainto_tsquery('english', query_text)
+  ORDER BY similarity DESC
+  LIMIT match_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 13. Chat persistence tables (JSONB transcript + optional name metadata)
+CREATE TABLE IF NOT EXISTS chats (
+  id TEXT PRIMARY KEY,
+  messages JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_metadata (
+  id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+  name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at DESC);
+
+ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_metadata ENABLE ROW LEVEL SECURITY;
+
+-- Public can read; only the service role (used by the backend) may write.
+DROP POLICY IF EXISTS "Allow public read chats" ON chats;
+CREATE POLICY "Allow public read chats" ON chats FOR SELECT TO public USING (true);
+DROP POLICY IF EXISTS "Allow service write chats" ON chats;
+CREATE POLICY "Allow service write chats" ON chats FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public read chat_metadata" ON chat_metadata;
+CREATE POLICY "Allow public read chat_metadata" ON chat_metadata FOR SELECT TO public USING (true);
+DROP POLICY IF EXISTS "Allow service write chat_metadata" ON chat_metadata;
+CREATE POLICY "Allow service write chat_metadata" ON chat_metadata FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP TRIGGER IF EXISTS update_chats_updated_at ON chats;
+CREATE TRIGGER update_chats_updated_at
+  BEFORE UPDATE ON chats
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- 14. Verify setup
 SELECT 'pgvector extension' as check_item, EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') as result
 UNION ALL
 SELECT 'legal_documents table', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'legal_documents')
 UNION ALL
-SELECT 'search function', EXISTS(SELECT 1 FROM pg_proc WHERE proname = 'search_legal_documents');
+SELECT 'vector search function', EXISTS(SELECT 1 FROM pg_proc WHERE proname = 'search_legal_documents')
+UNION ALL
+SELECT 'fulltext search function', EXISTS(SELECT 1 FROM pg_proc WHERE proname = 'fulltext_search_legal_documents')
+UNION ALL
+SELECT 'chats table', EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'chats');

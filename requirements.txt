@@ -1,13 +1,30 @@
+# ── Web framework ──────────────────────────────────────────────
 fastapi
 jinja2
 python-dotenv
 python-multipart
+uvicorn[standard]
+anyio
+
+# ── Data / config ──────────────────────────────────────────────
 PyYAML
 requests
-sentence-transformers
-supabase
-uvicorn[standard]
 beautifulsoup4
+
+# ── Vector store ───────────────────────────────────────────────
+supabase
 psycopg2-binary
-APScheduler
+
+# ── RAG / LangChain ────────────────────────────────────────────
+langchain
+langchain-core
+langchain-community
+langchain-groq
+langchain-cohere
+
+# ── Cloud embeddings & reranking ───────────────────────────────
+cohere
+
+# ── Ingestion ──────────────────────────────────────────────────
 PyMuPDF
+APScheduler

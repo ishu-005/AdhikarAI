@@ -1,0 +1,73 @@
+# Golden Q&A set for AdhikarAI RAG evaluation.
+# `expected_domain` checks the keyword router; `must_include` are facts/keywords the
+# answer should contain (case-insensitive); `lang` is the expected reply language.
+questions:
+  - q: "What are my rights if police arrest me?"
+    expected_domain: criminal_law
+    lang: en
+    must_include: ["bail", "lawyer"]
+
+  - q: "How do I file an RTI application?"
+    expected_domain: rti
+    lang: en
+    must_include: ["public authority", "fee"]
+
+  - q: "My employer is not paying my salary on time. What can I do?"
+    expected_domain: labour
+    lang: en
+    must_include: ["labour", "complaint"]
+
+  - q: "A shop refused to refund a defective product. What are my options?"
+    expected_domain: consumer
+    lang: en
+    must_include: ["consumer", "refund"]
+
+  - q: "गिरफ्तारी के समय मेरे क्या अधिकार हैं?"
+    expected_domain: criminal_law
+    lang: hi
+    must_include: ["अधिकार"]
+
+  - q: "What is the procedure to file a complaint with NHRC?"
+    expected_domain: human_rights
+    lang: en
+    must_include: ["complaint"]
+
+  - q: "How do I register a property and what stamp duty applies?"
+    expected_domain: property_finance
+    lang: en
+    must_include: ["registration"]
+
+  - q: "What are the fundamental rights guaranteed by the Constitution?"
+    expected_domain: citizen_rights
+    lang: en
+    must_include: ["fundamental rights"]
+
+  - q: "Is demanding dowry a punishable offence and what is the punishment?"
+    expected_domain: women_family
+    lang: en
+    must_include: ["dowry"]
+
+  - q: "What maternity leave am I entitled to under the Maternity Benefit Act?"
+    expected_domain: labour
+    lang: en
+    must_include: ["maternity"]
+
+  - q: "What is the punishment for murder under the Bharatiya Nyaya Sanhita?"
+    expected_domain: criminal_law
+    lang: en
+    must_include: ["murder"]
+
+  - q: "What documents are compulsorily registrable under the Registration Act?"
+    expected_domain: property_finance
+    lang: en
+    must_include: ["registration"]
+
+  - q: "What rights do persons with disabilities have for employment?"
+    expected_domain: human_rights
+    lang: en
+    must_include: ["disabilit"]
+
+  - q: "How can I complain about sexual harassment at my workplace?"
+    expected_domain: women_family
+    lang: en
+    must_include: ["harassment", "complaint"]

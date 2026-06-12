@@ -7,9 +7,15 @@ __pycache__/
 *.log
 crawl_hashes.json
 chroma_store/
-pdfs/
-*.pdf
 .DS_Store
 node_modules/
 .vscode/
 .idea/
+frontend-next/.next/
+frontend-next/out/
+frontend-next/next-env.d.ts
+eval/report.json
+.docs/
+*docs
+.pdfs/
+*pdfs
