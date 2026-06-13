@@ -4,10 +4,9 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,11 +25,9 @@ from backend.core.text import (
     detect_language,
     get_domain_catalog,
     load_links_config,
-    normalize_domain,
     normalize_text,
 )
 from backend.core.chat_intelligence import QueryPlan, plan_query
-from backend.ingest.pdf import ingest_pdf_bytes
 from backend.rag import pipeline
 
 logger = get_logger("app")
@@ -183,47 +180,6 @@ async def pdf_status():
             {"domain": domain, "folder": str(folder).replace("\\", "/"), "pdf_count": len(files), "pdf_files": files}
         )
     return {"pdf_status": status}
-
-
-def _ingest_pdf_background(data: bytes, filename: str, domain: str) -> None:
-    try:
-        stored = ingest_pdf_bytes(data, filename, domain)
-        logger.info("Auto-ingested %s -> %d chunks.", filename, stored)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Auto-ingest failed for %s: %s", filename, exc)
-
-
-@app.post("/api/upload-pdf")
-async def upload_pdf(background: BackgroundTasks, domain: str = Form(...), pdf: UploadFile = File(...)):
-    safe_domain = normalize_domain(domain)
-    if not safe_domain or safe_domain in {"_invalid", ".", ".."}:
-        raise HTTPException(status_code=400, detail="invalid domain")
-    if safe_domain not in settings.allowed_domains:
-        raise HTTPException(status_code=400, detail="domain not allowed")
-    if not pdf.filename or not pdf.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="only .pdf files are allowed")
-
-    data = await pdf.read()
-    if len(data) > settings.upload_max_mb * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"file too large, max {settings.upload_max_mb} MB")
-
-    folder = PROJECT_ROOT / "pdfs" / safe_domain
-    folder.mkdir(parents=True, exist_ok=True)
-    filename = Path(pdf.filename).name
-    target = folder / filename
-    target.write_bytes(data)
-
-    # Auto-ingest so the upload is searchable without a manual ingestor run.
-    background.add_task(_ingest_pdf_background, data, filename, safe_domain)
-
-    return {
-        "message": "pdf uploaded",
-        "domain": safe_domain,
-        "filename": filename,
-        "saved_to": str(target).replace("\\", "/"),
-        "size_bytes": len(data),
-        "ingest_status": "queued",
-    }
 
 
 # ── Query (sync + streaming) ───────────────────────────────────────────

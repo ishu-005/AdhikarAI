@@ -26,7 +26,6 @@ export default function ChatShell() {
   } = useChat();
 
   const [health, setHealth] = useState<"checking" | "ok" | "down">("checking");
-  const [domains, setDomains] = useState<string[]>([]);
   const [sources, setSources] = useState<DynamicSource[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -36,7 +35,6 @@ export default function ChatShell() {
       .health()
       .then((h) => setHealth(h.status === "ok" ? "ok" : "down"))
       .catch(() => setHealth("down"));
-    api.domains().then((d) => setDomains(d.domains)).catch(() => {});
     api.sources().then((s) => setSources(s.dynamic_sources)).catch(() => {});
     api.listChats().then((d) => setThreads(d.chats)).catch(() => {});
   }, [setThreads]);
@@ -150,9 +148,7 @@ export default function ChatShell() {
         onToggleInsights={() => setInsightsOpen((v) => !v)}
         insightsOpen={insightsOpen}
       />
-      {insightsOpen && (
-        <InsightsPanel domains={domains} sources={sources} onClose={() => setInsightsOpen(false)} />
-      )}
+      {insightsOpen && <InsightsPanel sources={sources} onClose={() => setInsightsOpen(false)} />}
     </main>
   );
 }

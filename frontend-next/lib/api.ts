@@ -37,14 +37,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ question, language, conversation_id }),
     }),
-  uploadPdf: async (domain: string, file: File) => {
-    const form = new FormData();
-    form.append("domain", domain);
-    form.append("pdf", file);
-    const res = await fetch(`${BASE}/api/upload-pdf`, { method: "POST", body: form });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json();
-  },
 };
 
 export interface StreamHandlers {

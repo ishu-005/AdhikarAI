@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BookMarked, ChevronDown, ExternalLink, FileText, Globe, Upload, X } from "lucide-react";
+import { BookMarked, ChevronDown, ExternalLink, FileText, Globe, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { api } from "@/lib/api";
 import { useChat } from "@/lib/store";
 import type { DynamicSource } from "@/lib/types";
 
@@ -56,44 +55,20 @@ function Section({
 }
 
 export default function InsightsPanel({
-  domains,
   sources,
   onClose,
 }: {
-  domains: string[];
   sources: DynamicSource[];
   onClose: () => void;
 }) {
   const { citations, liveSources } = useChat();
-  const [uploadDomain, setUploadDomain] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const upload = async () => {
-    if (!file || !uploadDomain) {
-      setStatus("Pick a domain and a PDF file.");
-      return;
-    }
-    setBusy(true);
-    setStatus("Uploading…");
-    try {
-      const res = await api.uploadPdf(uploadDomain, file);
-      setStatus(`✓ ${res.filename} — ingest ${res.ingest_status}.`);
-      setFile(null);
-    } catch (e: any) {
-      setStatus(`Upload failed: ${e?.message ?? e}`);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <aside className="glass fixed inset-x-2 bottom-2 top-2 z-40 flex flex-col overflow-hidden rounded-xl2 border border-line shadow-soft sm:inset-x-auto sm:right-3 sm:w-80 lg:static lg:z-auto">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
           <h2 className="font-display text-base font-semibold text-ink">Insight Box</h2>
-          <p className="text-xs text-ink-muted">Citations, sources, and uploads</p>
+          <p className="text-xs text-ink-muted">Citations and source status</p>
         </div>
         <button onClick={onClose} className="rounded-lg p-1.5 text-ink-muted hover:bg-raised" aria-label="Hide">
           <X size={16} />
@@ -182,43 +157,6 @@ export default function InsightsPanel({
           </ul>
         </Section>
 
-        <Section title="Upload a PDF" icon={<Upload size={15} />}>
-          <div className="space-y-2.5">
-            <select
-              value={uploadDomain}
-              onChange={(e) => setUploadDomain(e.target.value)}
-              className="w-full rounded-xl border border-line bg-raised px-3 py-2 text-sm text-ink outline-none focus:border-brand/50"
-            >
-              <option value="">Select legal domain…</option>
-              {domains.map((d) => (
-                <option key={d} value={d}>
-                  {d.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-
-            <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-raised/50 px-3 py-5 text-center text-xs text-ink-muted transition hover:border-brand/50 hover:bg-brand-soft/30">
-              <Upload size={18} className="text-brand" />
-              {file ? <span className="font-medium text-ink">{file.name}</span> : "Click to choose a PDF"}
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="hidden"
-              />
-            </label>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={upload}
-              disabled={busy}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient px-3 py-2 text-sm font-semibold text-white shadow-glow transition hover:brightness-110 disabled:opacity-50"
-            >
-              <Upload size={15} /> {busy ? "Uploading…" : "Upload & ingest"}
-            </motion.button>
-            {status && <p className="text-xs text-ink-muted">{status}</p>}
-          </div>
-        </Section>
       </div>
     </aside>
   );
