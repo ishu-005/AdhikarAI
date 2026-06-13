@@ -1,0 +1,139 @@
+[
+  {
+    "query": "My husband is threatening me",
+    "expected_domain": "women_family",
+    "expected_intent": "domestic_violence",
+    "expected_aspects": ["procedure"],
+    "expected_secondary_domains": ["criminal_law"],
+    "expected_sources": ["domestic violence"]
+  },
+  {
+    "query": "My husband is demanding dowry",
+    "expected_domain": "women_family",
+    "expected_intent": "dowry",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["dowry"]
+  },
+  {
+    "query": "PIO has not replied to my RTI application",
+    "expected_domain": "rti",
+    "expected_intent": "appeal",
+    "expected_aspects": ["timeline", "procedure"],
+    "expected_sources": ["rti"]
+  },
+  {
+    "query": "Police refused to register my FIR",
+    "expected_domain": "criminal_law",
+    "expected_intent": "fir",
+    "expected_aspects": ["procedure"],
+    "expected_query_terms": ["superintendent of police", "magistrate", "refusal to register fir"],
+    "expected_sources": ["fir"]
+  },
+  {
+    "query": "Police refused FIR",
+    "expected_domain": "criminal_law",
+    "expected_intent": "fir",
+    "expected_aspects": ["procedure"],
+    "expected_query_terms": ["superintendent of police", "magistrate", "refusal to register fir"],
+    "expected_sources": ["fir"]
+  },
+  {
+    "query": "I was arrested and need bail",
+    "expected_domain": "criminal_law",
+    "expected_intent": "arrest_bail",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["bail"]
+  },
+  {
+    "query": "I received a defective product and want refund",
+    "expected_domain": "consumer",
+    "expected_intent": "complaint",
+    "expected_aspects": ["defect", "procedure"],
+    "expected_sources": ["consumer"]
+  },
+  {
+    "query": "The service provider delayed my service and refuses compensation",
+    "expected_domain": "consumer",
+    "expected_intent": "service",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["consumer"]
+  },
+  {
+    "query": "My employer has not paid salary",
+    "expected_domain": "labour",
+    "expected_intent": "wages",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["wages"]
+  },
+  {
+    "query": "My landlord is refusing to return security deposit",
+    "expected_domain": "property_finance",
+    "expected_intent": "tenant",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["tenant"]
+  },
+  {
+    "query": "Registrar refused to register my property deed",
+    "expected_domain": "property_finance",
+    "expected_intent": "registration",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["registration"]
+  },
+  {
+    "query": "Government acquired my land without proper compensation",
+    "expected_domain": "property_finance",
+    "expected_intent": "land",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["land acquisition"]
+  },
+  {
+    "query": "Police abused me in custody",
+    "expected_domain": "criminal_law",
+    "expected_intent": "fir",
+    "expected_aspects": ["procedure"],
+    "expected_secondary_domains": ["human_rights"],
+    "expected_sources": ["human rights"]
+  },
+  {
+    "query": "I need free legal aid because I cannot afford a lawyer",
+    "expected_domain": "citizen_rights",
+    "expected_intent": "legal_aid",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["legal services"]
+  },
+  {
+    "query": "I faced disability discrimination",
+    "expected_domain": "human_rights",
+    "expected_intent": "disability",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["disabilities"]
+  },
+  {
+    "query": "Discrimination by authority",
+    "expected_domain": "human_rights",
+    "expected_intent": "ambiguous_discrimination",
+    "expected_needs_clarification": true
+  },
+  {
+    "query": "Disability discrimination by public authority",
+    "expected_domain": "human_rights",
+    "expected_intent": "disability",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["disabilities"]
+  },
+  {
+    "query": "Religious discrimination by public authority",
+    "expected_domain": "human_rights",
+    "expected_intent": "religion",
+    "expected_aspects": ["procedure"],
+    "expected_query_terms": ["minority rights", "freedom of religion", "constitutional remedy"],
+    "expected_sources": ["religion"]
+  },
+  {
+    "query": "How do I file a public grievance complaint",
+    "expected_domain": "grievance",
+    "expected_intent": "complaint",
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["grievance"]
+  }
+]

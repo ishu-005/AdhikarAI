@@ -206,7 +206,7 @@ def _prepare_query(payload: QueryRequest) -> tuple[str, str, str, str, str, list
     effective_question = plan.question
     domain, _ = detect_domain(effective_question)
     if not plan.needs_retrieval:
-        domain = "general"
+        domain = plan.domain_hint if plan.query_type == "clarification_ack" else "general"
     return original_question, effective_question, domain, language, conversation_id, history, plan
 
 

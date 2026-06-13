@@ -23,6 +23,8 @@ Context ({context_notice}):
 
 {issue_block}
 
+{support_block}
+
 {live_block}
 
 {history_block}
@@ -86,7 +88,7 @@ def fallback_answer(
         no_context = "I could not find exact matching legal context, so I cannot give source-backed next steps."
         tips = [
             "Source missing: the retrieved legal material does not support a specific action for this issue.",
-            "Ask again with one issue at a time or upload/source the relevant law or document.",
+            "Ask again with one issue at a time or mention the relevant law/document name if you know it.",
             "Keep facts, dates, and proof ready before using any legal remedy.",
         ]
 

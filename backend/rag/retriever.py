@@ -101,13 +101,13 @@ def _get_reranker():
         return None
 
 
-def build_retriever(domain: str) -> BaseRetriever:
+def build_retriever(domain: str, scoped: bool = False) -> BaseRetriever:
     """Compose vector (+ full-text) retrieval, fused and optionally reranked."""
     settings = get_settings()
     pool = settings.top_k * settings.retrieve_multiplier
     # Search the whole corpus unless domain filtering is explicitly enabled —
     # avoids misses when the router domain != a doc's stored folder-domain.
-    search_domain = domain if settings.retrieval_domain_filter else "general"
+    search_domain = domain if scoped or settings.retrieval_domain_filter else "general"
 
     vector = _SupabaseVectorRetriever(domain=search_domain, match_count=pool)
     base: BaseRetriever = vector
@@ -139,10 +139,10 @@ def build_retriever(domain: str) -> BaseRetriever:
     return base
 
 
-def retrieve(question: str, domain: str) -> list[Document]:
+def retrieve(question: str, domain: str, scoped: bool = False) -> list[Document]:
     """Run retrieval and return ranked documents (best-effort, never raises)."""
     try:
-        docs = build_retriever(domain).invoke(question)
+        docs = build_retriever(domain, scoped=scoped).invoke(question)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Retrieval failed: %s", exc)
         return []

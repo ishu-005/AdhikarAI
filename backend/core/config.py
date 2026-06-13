@@ -54,10 +54,8 @@ class Settings(BaseModel):
     hybrid_enabled: bool = os.getenv("HYBRID_ENABLED", "true").lower() == "true"
     vector_weight: float = float(os.getenv("VECTOR_WEIGHT", "0.6"))
     fulltext_weight: float = float(os.getenv("FULLTEXT_WEIGHT", "0.4"))
-    # Hard-filter retrieval to the routed domain. Off by default: the keyword
-    # router's domain labels (e.g. "rti") don't always match a doc's stored
-    # folder-domain (e.g. "citizen_rights"), so filtering silently drops relevant
-    # provisions. With a small corpus, the reranker picks the right section.
+    # Legacy broad retrieval flag. Domain-profile retrieval passes scoped=True
+    # and is always filtered to the profile's target domain.
     retrieval_domain_filter: bool = os.getenv("RETRIEVAL_DOMAIN_FILTER", "false").lower() == "true"
 
     # ── Request limits / CORS ──────────────────────────────────────────

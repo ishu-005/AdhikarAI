@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from backend.core.text import DOMAIN_KEYWORDS, detect_domain
 
@@ -24,6 +24,7 @@ class QueryPlan:
     reason: str = ""
     issues: tuple[str, ...] = ()
     domain_hint: str = "general"
+    clarification_state: dict = field(default_factory=dict)
 
     def diagnostics(self) -> dict:
         return {
@@ -33,6 +34,7 @@ class QueryPlan:
             "reason": self.reason,
             "issues": list(self.issues),
             "domain_hint": self.domain_hint,
+            "clarification_state": self.clarification_state,
         }
 
 
@@ -87,9 +89,13 @@ _LEGAL_EXTRA = {
     "husband",
     "wife",
     "threat",
+    "threaten",
     "threatening",
+    "threatning",
+    "intimidation",
     "violence",
     "domestic",
+    "cruelty",
     "lawyer",
     "court",
     "complaint",
@@ -100,11 +106,21 @@ _ISSUE_HINT = re.compile(
     r"\b("
     r"salary|wage|employer|employee|labou?r|landlord|tenant|security deposit|rent|"
     r"defective|refund|consumer|product|warranty|police|fir|arrest|bail|"
-    r"husband|wife|threat|threatening|domestic|violence|dowry|harassment|"
+    r"husband|wife|threat|threaten|threatening|threatning|intimidation|"
+    r"domestic|violence|dowry|harassment|cruelty|"
     r"rti|property|registration|court|complaint|lawyer|rights"
     r")\b",
     re.IGNORECASE,
 )
+
+_CLARIFICATION_TOPICS = {
+    "disability": ("disability_discrimination", "Disability discrimination by authority"),
+    "caste": ("caste_discrimination", "Caste discrimination by authority"),
+    "gender": ("gender_discrimination", "Gender discrimination by authority"),
+    "religion": ("religious_discrimination", "Religious discrimination by authority"),
+    "police/government abuse": ("authority_abuse", "Police or government abuse by authority"),
+    "other": ("discrimination", "Discrimination by authority"),
+}
 
 
 def _normalize(value: str) -> str:
@@ -166,6 +182,51 @@ def split_legal_issues(question: str) -> tuple[str, ...]:
 def plan_query(question: str, history: list[dict] | None, language: str) -> QueryPlan:
     """Classify a chat turn before retrieval so RAG is used only when useful."""
     original = question.strip()
+
+    awaiting_details = _latest_clarification_details_state(history)
+    if awaiting_details and not _is_new_topic(original, awaiting_details):
+        effective = f"{awaiting_details['topic']}. {original}"
+        return QueryPlan(
+            question=effective,
+            original_question=original,
+            query_type="followup",
+            needs_retrieval=True,
+            rewritten=True,
+            reason="clarification_details",
+            issues=split_legal_issues(effective)[:1],
+            domain_hint=str(awaiting_details.get("domain") or "human_rights"),
+            clarification_state={**awaiting_details, "awaiting_details": False},
+        )
+
+    pending = _latest_pending_clarification(history)
+    if pending:
+        resolved = _resolve_clarification(original, pending)
+        if resolved:
+            if resolved["choice_only"]:
+                return QueryPlan(
+                    question=resolved["topic"],
+                    original_question=original,
+                    query_type="clarification_ack",
+                    needs_retrieval=False,
+                    rewritten=True,
+                    reason="clarification_choice",
+                    issues=(),
+                    domain_hint=resolved["domain"],
+                    clarification_state={k: v for k, v in resolved.items() if k != "choice_only"},
+                )
+            effective = f"{resolved['topic']}. {original}"
+            return QueryPlan(
+                question=effective,
+                original_question=original,
+                query_type="followup",
+                needs_retrieval=True,
+                rewritten=True,
+                reason="clarification_resolved",
+                issues=split_legal_issues(effective)[:1],
+                domain_hint=resolved["domain"],
+                clarification_state={k: v for k, v in resolved.items() if k != "choice_only"},
+            )
+
     rewrite = rewrite_followup(original, history, language)
     effective = rewrite.question.strip()
     domain, _ = detect_domain(effective)
@@ -240,6 +301,115 @@ def latest_user_question(history: list[dict] | None) -> str:
     return ""
 
 
+def _latest_pending_clarification(history: list[dict] | None) -> dict | None:
+    items = list(history or [])
+    for index in range(len(items) - 1, -1, -1):
+        item = items[index]
+        if item.get("role") != "assistant":
+            continue
+        diagnostics = (item.get("meta") or {}).get("diagnostics") or {}
+        state = diagnostics.get("clarification_state") or {}
+        if state.get("awaiting_details"):
+            return None
+        intent = diagnostics.get("query_intent") or {}
+        if not intent.get("needs_clarification"):
+            continue
+        base_question = ""
+        for previous in range(index - 1, -1, -1):
+            if items[previous].get("role") == "user":
+                base_question = str(items[previous].get("content") or "").strip()
+                break
+        return {
+            "domain": str(intent.get("domain") or "human_rights"),
+            "base_question": base_question,
+            "choices": tuple(str(choice) for choice in intent.get("clarification_choices") or ()),
+        }
+    return None
+
+
+def _latest_clarification_details_state(history: list[dict] | None) -> dict | None:
+    for item in reversed(history or []):
+        if item.get("role") != "assistant":
+            continue
+        diagnostics = (item.get("meta") or {}).get("diagnostics") or {}
+        state = diagnostics.get("clarification_state") or {}
+        if state.get("awaiting_details"):
+            label = str(state.get("label") or "Other")
+            intent, topic = _topic_for_clarification_label(label)
+            return {
+                **state,
+                "intent": state.get("intent") or intent,
+                "topic": state.get("topic") or topic,
+            }
+        if diagnostics.get("query_intent", {}).get("needs_clarification"):
+            return None
+    return None
+
+
+def _resolve_clarification(question: str, pending: dict) -> dict | None:
+    raw = _normalize(question)
+    choices = list(pending.get("choices") or ())
+    selected = ""
+    if raw.isdigit():
+        index = int(raw) - 1
+        if 0 <= index < len(choices):
+            selected = choices[index]
+    if not selected:
+        for choice in choices:
+            key = _normalize(choice)
+            if raw == key or raw.startswith(f"{key} ") or key.startswith(raw):
+                selected = choice
+                break
+    if not selected and "caste" in raw:
+        selected = "Caste"
+    if not selected:
+        return None
+
+    intent, topic = _topic_for_clarification_label(selected)
+    choice_only = len(raw.split()) <= 3
+    return {
+        "domain": str(pending.get("domain") or "human_rights"),
+        "intent": intent,
+        "label": selected,
+        "topic": topic,
+        "base_question": str(pending.get("base_question") or ""),
+        "awaiting_details": choice_only,
+        "choice_only": choice_only,
+    }
+
+
+def _topic_for_clarification_label(label: str) -> tuple[str, str]:
+    topic_key = _normalize(label)
+    return _CLARIFICATION_TOPICS.get(topic_key, ("discrimination", f"{label} discrimination by authority"))
+
+
+def _is_new_topic(question: str, clarification_state: dict) -> bool:
+    new_domain, _ = detect_domain(question)
+    previous_domain = str(clarification_state.get("domain") or "general")
+    if new_domain != "general" and new_domain != previous_domain:
+        return True
+
+    text = _normalize(question)
+    previous_intent = str(clarification_state.get("intent") or "")
+    if previous_domain == "human_rights" and "discrimination" in previous_intent:
+        discrimination_terms = (
+            "discrimination",
+            "authority",
+            "benefit",
+            "favor",
+            "favour",
+            "religion",
+            "religious",
+            "caste",
+            "gender",
+            "minority",
+            "rights",
+        )
+        if _has_legal_signal(text) and not any(term in text for term in discrimination_terms):
+            return True
+    return False
+
+
 def rewrite_followup(question: str, history: list[dict] | None, language: str) -> RewriteResult:
     raw = question.strip()
     command = _normalize(raw)
@@ -288,7 +458,7 @@ def make_chat_title(question: str) -> str:
         return "Criminal Law Question"
     if re.search(r"registration|property|land|document|deed", text):
         return "Property Registration"
-    if re.search(r"marriage|divorce|dowry|domestic|women|family", text):
+    if re.search(r"marriage|divorce|dowry|domestic|women|family|husband|wife|threat|cruelty", text):
         return "Family Law Guidance"
 
     cleaned = re.sub(r"[^\w\s]", "", question, flags=re.UNICODE).strip()

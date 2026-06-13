@@ -23,6 +23,14 @@ from backend.core.text import (
 from backend.core.web import live_fetch_for_domain
 from backend.rag.chain import build_answer_chain
 from backend.rag.citations import build_citations
+from backend.rag.domain_profiles import (
+    QueryIntent,
+    build_domain_retrieval_plan,
+    build_support_requirements,
+    classify_query_intent,
+    dedupe_ranked_documents,
+    rank_documents_for_intent,
+)
 from backend.rag.prompts import fallback_answer, format_docs, format_history, format_live
 from backend.rag.retriever import retrieve
 
@@ -43,19 +51,53 @@ def _normalize_routing(question: str, domain: str | None, language: str | None) 
     return domain or "general", language
 
 
+def _expand_retrieval_query(question: str, domain: str) -> str:
+    """Compatibility helper returning the strongest domain-profile expansion."""
+    profile = build_domain_retrieval_plan(question, domain)
+    if len(profile.queries) > 1:
+        return profile.queries[1].query
+    return profile.queries[0].query
+
+
+def _retrieve_with_profile(question: str, domain: str) -> tuple[list, list[dict], int]:
+    profile = build_domain_retrieval_plan(question, domain)
+    groups = []
+    blocks = []
+    for item in profile.queries:
+        docs = retrieve(item.query, item.domain, scoped=True)
+        if not docs:
+            metrics.incr("retrieval_empty")
+        groups.append(docs)
+        blocks.append(
+            {
+                "query": item.query,
+                "domain": item.domain,
+                "aspect": item.aspect,
+                "retrieved": len(docs),
+            }
+        )
+    docs = dedupe_ranked_documents(groups, profile.context_limit)
+    return rank_documents_for_intent(question, domain, docs), blocks, profile.context_limit
+
+
 def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None = None) -> dict:
     """Retrieve context + live sources and prepare prompt inputs."""
     issues = list(plan.issues) if plan and plan.query_type == "legal_multi_issue" else []
+    retrieval_blocks: list[dict] = []
+    context_limit = 5
     if issues:
         docs = []
         issue_blocks = []
         with metrics.timer("retrieve"):
             for issue in issues[:6]:
                 issue_domain, _ = detect_domain(issue)
-                issue_docs = retrieve(issue, issue_domain or domain)
+                issue_domain = issue_domain or domain
+                issue_docs, issue_retrieval_blocks, issue_context_limit = _retrieve_with_profile(issue, issue_domain)
                 if not issue_docs:
                     metrics.incr("retrieval_empty")
                 docs.extend(issue_docs)
+                retrieval_blocks.extend(issue_retrieval_blocks)
+                context_limit = max(context_limit, issue_context_limit)
                 issue_blocks.append(
                     {
                         "issue": issue,
@@ -65,7 +107,7 @@ def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None 
                 )
     else:
         with metrics.timer("retrieve"):
-            docs = retrieve(question, domain)
+            docs, retrieval_blocks, context_limit = _retrieve_with_profile(question, domain)
         issue_blocks = []
     if not docs:
         metrics.incr("retrieval_empty")
@@ -78,8 +120,9 @@ def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None 
     prompt_vars = {
         "lang_inst": language_instruction(language),
         "question": question,
-        "context": format_docs(docs),
+        "context": format_docs(docs, limit=context_limit),
         "context_notice": context_label,
+        "support_block": build_support_requirements(question, domain, docs),
         "live_block": format_live(live_chunks),
         "issue_block": _format_issue_block(issue_blocks),
         "history_block": "",  # filled by caller if history present
@@ -94,7 +137,7 @@ def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None 
         "context_label": context_label,
         "context_notice": notice,
         "prompt_vars": prompt_vars,
-        "diagnostics": _diagnostics(plan, docs, issue_blocks),
+        "diagnostics": _diagnostics(plan, docs, issue_blocks, retrieval_blocks, classify_query_intent(question, domain)),
     }
 
 
@@ -108,12 +151,20 @@ def _format_issue_block(issue_blocks: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _diagnostics(plan: QueryPlan | None, docs: list, issue_blocks: list[dict] | None = None) -> dict:
+def _diagnostics(
+    plan: QueryPlan | None,
+    docs: list,
+    issue_blocks: list[dict] | None = None,
+    retrieval_blocks: list[dict] | None = None,
+    query_intent=None,
+) -> dict:
     base = plan.diagnostics() if plan else {}
     base.update(
         {
             "retrieval_count": len(docs),
             "grounded_issue_count": sum(1 for item in issue_blocks or [] if item.get("retrieved", 0) > 0),
+            "retrieval_queries": retrieval_blocks or [],
+            "query_intent": query_intent.diagnostics() if query_intent else {},
         }
     )
     return base
@@ -151,6 +202,21 @@ def _chat_only_answer(question: str, language: str) -> str:
 
 
 def _no_retrieval_payload(question: str, language: str, plan: QueryPlan) -> dict:
+    if plan.query_type == "clarification_ack":
+        label = plan.clarification_state.get("label") or "that type"
+        answer = (
+            f"Got it: {label}. Share what happened, who the authority was, and what action or denial you faced. "
+            "Then I can retrieve the relevant legal material and give grounded next steps."
+        )
+        return {
+            "answer": answer,
+            "context_sources": ["clarification"],
+            "context_source_label": "clarification",
+            "context_notice": "Clarification saved; waiting for the situation details.",
+            "citations": [],
+            "live_sources": [],
+            "diagnostics": _diagnostics(plan, [], []),
+        }
     return {
         "answer": _chat_only_answer(question, language),
         "context_sources": ["conversation"],
@@ -159,6 +225,23 @@ def _no_retrieval_payload(question: str, language: str, plan: QueryPlan) -> dict
         "citations": [],
         "live_sources": [],
         "diagnostics": _diagnostics(plan, [], []),
+    }
+
+
+def _clarification_answer(intent: QueryIntent) -> str:
+    choices = "\n".join(f"{index}. {choice}" for index, choice in enumerate(intent.clarification_choices, start=1))
+    return f"{intent.clarifying_question}\n\n{choices}"
+
+
+def _clarification_payload(plan: QueryPlan, intent: QueryIntent) -> dict:
+    return {
+        "answer": _clarification_answer(intent),
+        "context_sources": ["clarification"],
+        "context_source_label": "clarification",
+        "context_notice": "Clarification is needed before legal retrieval.",
+        "citations": [],
+        "live_sources": [],
+        "diagnostics": _diagnostics(plan, [], [], [], intent),
     }
 
 
@@ -193,6 +276,9 @@ def answer_query(
         return _no_retrieval_payload(query_plan.question, language, query_plan)
     question = query_plan.question
     domain, language = _normalize_routing(question, domain, language)
+    query_intent = classify_query_intent(question, domain)
+    if query_intent.needs_clarification:
+        return _clarification_payload(query_plan, query_intent)
     settings = get_settings()
     if not settings.groq_api_key:
         ctx = _assemble(question, domain, language, query_plan)
@@ -227,6 +313,12 @@ async def astream_query(
         return
     question = query_plan.question
     domain, language = _normalize_routing(question, domain, language)
+    query_intent = classify_query_intent(question, domain)
+    if query_intent.needs_clarification:
+        result = _clarification_payload(query_plan, query_intent)
+        yield {"type": "replace", "value": result["answer"]}
+        yield {"type": "done", **result}
+        return
     settings = get_settings()
     ctx = _assemble(question, domain, language, query_plan)
     ctx["prompt_vars"]["history_block"] = format_history(history)
