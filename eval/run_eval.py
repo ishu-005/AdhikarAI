@@ -19,6 +19,7 @@ from pathlib import Path
 import yaml
 
 from backend.core.config import resolve_path
+from backend.core.chat_intelligence import plan_query
 from backend.core.text import detect_domain
 from backend.rag.pipeline import answer_query
 from backend.rag.retriever import retrieve
@@ -44,20 +45,37 @@ def _contains_any(text: str, terms: list[str]) -> bool:
 def main() -> None:
     cases = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))["questions"]
     rows = []
-    agg = {"domain_ok": 0, "retrieval_hit": 0, "answer_cov": 0, "lang_ok": 0}
+    agg = {
+        "domain_ok": 0,
+        "retrieval_hit": 0,
+        "answer_cov": 0,
+        "lang_ok": 0,
+        "plan_ok": 0,
+        "retrieval_gate_ok": 0,
+        "issues_ok": 0,
+    }
 
     for case in cases:
         q = case["q"]
         terms = case.get("must_include", [])
         expected_domain = case.get("expected_domain", "general")
         expected_lang = case.get("lang", "en")
+        expected_query_type = case.get("expected_query_type")
+        expected_needs_retrieval = case.get("needs_retrieval")
+        issues_min = int(case.get("issues_min", 0) or 0)
 
         domain, _ = detect_domain(q)
+        plan = plan_query(q, [], expected_lang)
+        if not plan.needs_retrieval:
+            domain = "general"
         domain_ok = domain == expected_domain
+        plan_ok = expected_query_type is None or plan.query_type == expected_query_type
+        retrieval_gate_ok = expected_needs_retrieval is None or plan.needs_retrieval == expected_needs_retrieval
+        issues_ok = not issues_min or len(plan.issues) >= issues_min
 
-        docs = retrieve(q, domain)
+        docs = retrieve(q, domain) if plan.needs_retrieval else []
         joined = "\n".join(d.page_content for d in docs)
-        retrieval_hit = _contains_any(joined, terms) if terms else bool(docs)
+        retrieval_hit = _contains_any(joined, terms) if terms else (bool(docs) or not plan.needs_retrieval)
 
         t0 = time.perf_counter()
         result = answer_query(q, domain, expected_lang, history=None)
@@ -74,6 +92,9 @@ def main() -> None:
         agg["retrieval_hit"] += retrieval_hit
         agg["answer_cov"] += answer_cov
         agg["lang_ok"] += lang_ok
+        agg["plan_ok"] += plan_ok
+        agg["retrieval_gate_ok"] += retrieval_gate_ok
+        agg["issues_ok"] += issues_ok
 
         rows.append(
             {
@@ -81,6 +102,12 @@ def main() -> None:
                 "domain": domain,
                 "expected_domain": expected_domain,
                 "domain_ok": domain_ok,
+                "query_type": plan.query_type,
+                "plan_ok": plan_ok,
+                "needs_retrieval": plan.needs_retrieval,
+                "retrieval_gate_ok": retrieval_gate_ok,
+                "issues": list(plan.issues),
+                "issues_ok": issues_ok,
                 "n_docs": len(docs),
                 "retrieval_hit": retrieval_hit,
                 "answer_cov": answer_cov,
@@ -90,7 +117,7 @@ def main() -> None:
         )
         print(
             f"[{'OK ' if domain_ok else 'BAD'}] {q[:48]:48s} "
-            f"domain={domain:14s} docs={len(docs)} "
+            f"domain={domain:14s} type={plan.query_type:17s} docs={len(docs)} "
             f"hit={'Y' if retrieval_hit else 'n'} cov={'Y' if answer_cov else 'n'} "
             f"lang={'Y' if lang_ok else 'n'} {latency_ms}ms"
         )

@@ -71,3 +71,25 @@ questions:
     expected_domain: women_family
     lang: en
     must_include: ["harassment", "complaint"]
+
+  - q: "Tell me about yourself"
+    expected_domain: general
+    expected_query_type: smalltalk
+    needs_retrieval: false
+    lang: en
+    must_include: ["AdhikarAI"]
+
+  - q: "or btao"
+    expected_domain: general
+    expected_query_type: smalltalk
+    needs_retrieval: false
+    lang: en
+    must_include: []
+
+  - q: "My employer is not paying my salary. My landlord is refusing to return my security deposit. I received a defective product. My husband is threatening me. Police refused to register my FIR."
+    expected_domain: criminal_law
+    expected_query_type: legal_multi_issue
+    needs_retrieval: true
+    issues_min: 5
+    lang: en
+    must_include: []

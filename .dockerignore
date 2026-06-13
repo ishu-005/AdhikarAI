@@ -9,6 +9,12 @@ __pycache__
 .mypy_cache
 .ruff_cache
 node_modules
+frontend-next
+pdfs
+eval
+docs
+*.md
+!README.md
 *.log
 .env
 chroma_store

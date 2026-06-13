@@ -36,7 +36,7 @@ export default function Composer({ onSend }: { onSend: (q: string) => void }) {
   };
 
   return (
-    <div className="border-t border-line bg-panel/60 p-3 sm:p-4">
+    <div className="border-t border-line bg-panel/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
       <div className="group relative rounded-xl2 border border-line bg-raised transition focus-within:border-brand/50 focus-within:shadow-glow">
         <textarea
           ref={ref}
@@ -61,8 +61,8 @@ export default function Composer({ onSend }: { onSend: (q: string) => void }) {
         </motion.button>
       </div>
 
-      <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-ink-muted">
-        <span className="flex items-center gap-1.5">
+      <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-ink-muted">
+        <span className="hidden items-center gap-1.5 sm:flex">
           <kbd className="rounded border border-line bg-raised px-1.5 py-0.5 font-sans">Enter</kbd>
           to send
           <span className="mx-1 opacity-40">/</span>

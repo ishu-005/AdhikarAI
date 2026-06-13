@@ -1,6 +1,7 @@
 import sys
 import unittest
 import ast
+from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -46,6 +47,16 @@ class RunLauncherTests(unittest.TestCase):
     def test_launcher_source_is_ascii_safe_for_windows_console(self):
         source = Path("run.py").read_text(encoding="utf-8")
         self.assertTrue(source.isascii())
+
+    def test_supabase_check_can_be_skipped_for_fast_startup(self):
+        env = {
+            "ADHIKARAI_SKIP_SUPABASE_CHECK": "1",
+            "SUPABASE_URL": "https://example.supabase.co",
+            "SUPABASE_API_KEY": "test-key",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            with patch("builtins.__import__", side_effect=KeyboardInterrupt):
+                self.assertFalse(run.check_supabase())
 
 
 if __name__ == "__main__":

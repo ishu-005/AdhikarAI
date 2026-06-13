@@ -84,6 +84,10 @@ def check_env() -> bool:
 
 def check_supabase() -> bool:
     """Check Supabase connectivity."""
+    if os.getenv("ADHIKARAI_SKIP_SUPABASE_CHECK", "").strip().lower() in {"1", "true", "yes"}:
+        log("Skipping Supabase connection check (ADHIKARAI_SKIP_SUPABASE_CHECK=1).", "WARN")
+        return False
+
     log("Checking Supabase connection...")
     url = os.getenv("SUPABASE_URL")
     api_key = os.getenv("SUPABASE_API_KEY")
@@ -92,14 +96,34 @@ def check_supabase() -> bool:
         log("Supabase credentials not set", "WARN")
         return False
 
-    try:
-        from supabase import create_client
+    timeout = float(os.getenv("ADHIKARAI_SUPABASE_CHECK_TIMEOUT", "8"))
+    code = """
+import os
+from supabase import create_client
 
-        client = create_client(url, api_key)
-        # Try a simple query
-        result = client.table("legal_documents").select("id").limit(1).execute()
+client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_API_KEY"])
+client.table("legal_documents").select("id").limit(1).execute()
+print("ok", flush=True)
+""".strip()
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=os.environ.copy(),
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip().splitlines()
+            message = detail[-1] if detail else f"exit code {result.returncode}"
+            raise RuntimeError(message)
         log("OK Supabase connected", "OK")
         return True
+    except subprocess.TimeoutExpired:
+        log(f"Supabase check timed out after {timeout:g}s; continuing startup.", "WARN")
+        log("Set ADHIKARAI_SKIP_SUPABASE_CHECK=1 to skip this validation.", "WARN")
+        return False
     except Exception as exc:
         log(f"Supabase check failed: {exc}", "WARN")
         log("Run the Supabase migration manually in SQL Editor: supabase_migration.sql", "WARN")

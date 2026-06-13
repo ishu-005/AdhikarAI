@@ -14,6 +14,17 @@ export interface LiveSource {
   snippet: string;
 }
 
+export interface QueryDiagnostics {
+  query_type?: string;
+  needs_retrieval?: boolean;
+  rewritten?: boolean;
+  reason?: string;
+  issues?: string[];
+  domain_hint?: string;
+  retrieval_count?: number;
+  grounded_issue_count?: number;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -24,6 +35,7 @@ export interface ChatMessage {
     citations?: Citation[];
     live_sources?: LiveSource[];
     context_notice?: string;
+    diagnostics?: QueryDiagnostics;
   };
 }
 
@@ -40,6 +52,7 @@ export interface QueryResult {
   context_notice: string;
   citations: Citation[];
   live_sources: LiveSource[];
+  diagnostics?: QueryDiagnostics;
   _cached?: boolean;
   _rewritten?: boolean;
 }

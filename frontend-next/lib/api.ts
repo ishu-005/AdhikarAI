@@ -1,4 +1,12 @@
-import type { Citation, DynamicSource, Language, LiveSource, QueryResult, ThreadSummary } from "./types";
+import type {
+  Citation,
+  DynamicSource,
+  Language,
+  LiveSource,
+  QueryDiagnostics,
+  QueryResult,
+  ThreadSummary,
+} from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
@@ -40,7 +48,14 @@ export const api = {
 };
 
 export interface StreamHandlers {
-  onMeta?: (m: { conversation_id: string; domain: string; language: Language }) => void;
+  onMeta?: (m: {
+    conversation_id: string;
+    domain: string;
+    language: Language;
+    diagnostics?: QueryDiagnostics;
+    _rewritten?: boolean;
+    _cached?: boolean;
+  }) => void;
   onToken?: (t: string) => void;
   onReplace?: (full: string) => void;
   onDone?: (d: {
@@ -49,6 +64,7 @@ export interface StreamHandlers {
     live_sources: LiveSource[];
     context_notice: string;
     context_sources: string[];
+    diagnostics?: QueryDiagnostics;
   }) => void;
   onError?: (msg: string) => void;
 }

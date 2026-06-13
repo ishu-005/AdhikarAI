@@ -10,7 +10,16 @@ def sse(event: str, data: dict) -> str:
 
 
 def cached_stream_events(conversation_id: str, domain: str, language: str, cached: dict) -> Iterator[str]:
-    yield sse("meta", {"conversation_id": conversation_id, "domain": domain, "language": language, "_cached": True})
+    yield sse(
+        "meta",
+        {
+            "conversation_id": conversation_id,
+            "domain": domain,
+            "language": language,
+            "_cached": True,
+            "diagnostics": cached.get("diagnostics", {}),
+        },
+    )
     yield sse("replace", {"value": cached.get("answer", "")})
     yield sse(
         "done",
@@ -21,6 +30,7 @@ def cached_stream_events(conversation_id: str, domain: str, language: str, cache
             "context_notice": cached.get("context_notice", ""),
             "citations": cached.get("citations", []),
             "live_sources": cached.get("live_sources", []),
+            "diagnostics": cached.get("diagnostics", {}),
             "_cached": True,
         },
     )

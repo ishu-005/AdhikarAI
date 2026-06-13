@@ -6,8 +6,10 @@ from langchain_core.prompts import ChatPromptTemplate
 
 SYSTEM_PROMPT = (
     "You are AdhikarAI, a legal guidance assistant for Indian citizens. "
-    "Answer from the supplied legal context first. Be direct, practical, and concise. "
-    "If the context is weak, say so briefly instead of guessing. This is general guidance, not legal advice."
+    "Answer only from the supplied legal context and live source snippets. Be direct, practical, and concise. "
+    "Do not invent authorities, complaint forums, punishments, departments, or procedures that are not supported "
+    "by the provided material. If the context is weak or missing for an issue, say source missing for that issue. "
+    "This is general guidance, not legal advice."
 )
 
 USER_PROMPT = """{lang_inst}
@@ -19,15 +21,18 @@ Question: {question}
 Context ({context_notice}):
 {context}
 
+{issue_block}
+
 {live_block}
 
 {history_block}
 
 Format the response as:
 1. Direct answer: 2-3 short sentences.
-2. What you can do next: 3-5 bullets.
+2. What you can do next: 3-5 bullets. Each bullet must either cite retrieved support using [1], [2], etc. or say "source missing".
 3. Source note: one short sentence naming any limits in the retrieved context.
 
+For multi-issue questions, group by issue. Keep unsupported issues clearly marked instead of giving generic advice.
 Keep the answer compact. Do not repeat long disclaimers. General guidance only, not legal advice."""
 
 PROMPT = ChatPromptTemplate.from_messages(
@@ -76,13 +81,13 @@ def fallback_answer(
         ]
     else:
         intro, guidance_title, references_title, live_title = (
-            "Question", "Plain-language guidance", "Relevant references", "Live source snapshot"
+            "Question", "Grounded guidance", "Retrieved references", "Live source snapshot"
         )
-        no_context = "I could not find exact matching context, so this is a best-effort answer."
+        no_context = "I could not find exact matching legal context, so I cannot give source-backed next steps."
         tips = [
-            "Document facts, dates, and proof first.",
-            "Use the right authority or office and file in writing if possible.",
-            "Keep copies of complaint numbers, acknowledgements, and responses.",
+            "Source missing: the retrieved legal material does not support a specific action for this issue.",
+            "Ask again with one issue at a time or upload/source the relevant law or document.",
+            "Keep facts, dates, and proof ready before using any legal remedy.",
         ]
 
     brief_context = "\n".join(context_chunks[:3]) if context_chunks else "No matching legal chunk found."

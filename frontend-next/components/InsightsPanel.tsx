@@ -89,7 +89,7 @@ export default function InsightsPanel({
   };
 
   return (
-    <aside className="glass hidden w-80 flex-col overflow-hidden rounded-xl2 border border-line shadow-soft lg:flex">
+    <aside className="glass fixed inset-x-2 bottom-2 top-2 z-40 flex flex-col overflow-hidden rounded-xl2 border border-line shadow-soft sm:inset-x-auto sm:right-3 sm:w-80 lg:static lg:z-auto">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
           <h2 className="font-display text-base font-semibold text-ink">Insight Box</h2>

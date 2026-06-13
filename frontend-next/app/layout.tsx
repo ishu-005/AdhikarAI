@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AdhikarAI — Know Your Rights",
-  description: "Free, bilingual legal assistance for Indian citizens — grounded in the actual bare acts, in Hindi and English.",
+  title: "AdhikarAI - Know Your Rights",
+  description: "Free, bilingual legal assistance for Indian citizens, grounded in the actual bare acts, in Hindi and English.",
 };
 
 export const viewport = {
@@ -23,7 +23,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
-        {/* Apply persisted theme before paint to avoid a flash. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `try{if(localStorage.theme==='dark'||(!('theme'in localStorage)&&matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`,

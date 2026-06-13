@@ -19,6 +19,7 @@ export default function ChatShell() {
     addMessage,
     appendToLast,
     replaceLast,
+    updateLastMeta,
     setStreaming,
     setInsights,
     upsertThread,
@@ -62,6 +63,7 @@ export default function ChatShell() {
             convId = m.conversation_id;
             setActive(m.conversation_id);
             setInsights({ domain: m.domain });
+            updateLastMeta({ domain: m.domain, language: m.language, diagnostics: m.diagnostics });
             if (isNewConversation) {
               upsertThread({ id: m.conversation_id, title: makeThreadTitle(q) });
             }
@@ -74,6 +76,12 @@ export default function ChatShell() {
               citations: d.citations ?? [],
               liveSources: d.live_sources ?? [],
               contextNotice: d.context_notice ?? "",
+            });
+            updateLastMeta({
+              citations: d.citations ?? [],
+              live_sources: d.live_sources ?? [],
+              context_notice: d.context_notice ?? "",
+              diagnostics: d.diagnostics,
             });
           },
           onError: (msg) => replaceLast(`Request failed: ${msg}`),
@@ -90,6 +98,7 @@ export default function ChatShell() {
       addMessage,
       appendToLast,
       replaceLast,
+      updateLastMeta,
       setActive,
       setInsights,
       setStreaming,
@@ -127,7 +136,7 @@ export default function ChatShell() {
   );
 
   return (
-    <main className="mx-auto flex h-screen max-w-[1600px] gap-3 p-3">
+    <main className="mx-auto flex h-[100dvh] max-w-[1600px] gap-2 overflow-hidden p-2 sm:gap-3 sm:p-3">
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}

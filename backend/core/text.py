@@ -104,11 +104,11 @@ def language_instruction(language: str) -> str:
     if language == "hi":
         return (
             "Reply in simple Hindi. If the retrieved context does not directly support the "
-            "answer, say it is a best-effort answer based on your understanding."
+            "answer, say source missing for that issue instead of using outside knowledge."
         )
     return (
         "Reply in simple English. If the retrieved context does not directly support the "
-        "answer, say it is a best-effort answer based on your understanding."
+        "answer, say source missing for that issue instead of using outside knowledge."
     )
 
 
@@ -134,4 +134,4 @@ def answer_scope_notice(
         return "मुझे matching context नहीं मिला, इसलिए यह general best-effort उत्तर है."
     if has_context:
         return f"Source: {' + '.join(sources)}."
-    return "I could not find matching context, so this is a general best-effort answer."
+    return "I could not find matching context, so source-backed legal next steps are unavailable."

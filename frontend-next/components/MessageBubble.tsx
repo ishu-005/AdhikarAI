@@ -3,7 +3,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Copy, Scale, User } from "lucide-react";
+import { Check, Copy, Database, RotateCcw, Scale, User } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ChatMessage } from "@/lib/types";
 
@@ -20,6 +20,8 @@ export default function MessageBubble({ msg, streaming }: { msg: ChatMessage; st
   };
 
   const empty = !msg.content && streaming;
+  const diagnostics = !isUser ? msg.meta?.diagnostics : undefined;
+  const issueCount = diagnostics?.issues?.length ?? 0;
 
   return (
     <motion.div
@@ -60,6 +62,34 @@ export default function MessageBubble({ msg, streaming }: { msg: ChatMessage; st
             </div>
           )}
         </div>
+
+        {!isUser && diagnostics && diagnostics.needs_retrieval !== false && !empty && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
+            <span className="inline-flex items-center gap-1 rounded-md border border-line bg-raised px-2 py-1">
+              <Database size={12} />
+              RAG used
+            </span>
+            {diagnostics.query_type && (
+              <span className="rounded-md border border-line bg-raised px-2 py-1">
+                {diagnostics.query_type.replaceAll("_", " ")}
+              </span>
+            )}
+            {issueCount > 1 && (
+              <span className="rounded-md border border-line bg-raised px-2 py-1">{issueCount} issues</span>
+            )}
+            {(diagnostics.retrieval_count ?? 0) > 0 && (
+              <span className="rounded-md border border-line bg-raised px-2 py-1">
+                {diagnostics.retrieval_count} chunks
+              </span>
+            )}
+            {diagnostics.rewritten && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-line bg-raised px-2 py-1">
+                <RotateCcw size={12} />
+                Follow-up
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Copy button (assistant, when there is content) */}
         {!isUser && msg.content && !streaming && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Scale, Trash2, X, MessagesSquare } from "lucide-react";
+import { MessagesSquare, Plus, Scale, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { api } from "@/lib/api";
 import { useChat } from "@/lib/store";
@@ -31,7 +31,6 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Mobile backdrop */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -47,30 +46,26 @@ export default function Sidebar({
       <aside
         className={`${
           open ? "translate-x-0" : "-translate-x-[110%]"
-        } fixed inset-y-0 left-0 z-30 w-72 transform p-3 transition-transform duration-300 md:static md:translate-x-0`}
+        } fixed inset-y-0 left-0 z-30 w-[min(18rem,calc(100vw-1rem))] transform p-2 transition-transform duration-300 sm:p-3 md:static md:translate-x-0`}
       >
         <div className="glass flex h-full flex-col rounded-xl2 border border-line p-4 shadow-soft">
-          {/* Brand */}
           <div className="mb-5 flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-gradient shadow-glow">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-gradient shadow-glow">
                 <Scale size={22} className="text-white" />
               </div>
-              <div>
-                <h1 className="font-display text-xl font-bold leading-none text-ink">
+              <div className="min-w-0">
+                <h1 className="truncate font-display text-xl font-bold leading-none text-ink">
                   Adhikar<span className="gradient-text">AI</span>
                 </h1>
-                <p className="mt-1 text-[11px] text-ink-muted">Know your rights · हिंदी & English</p>
+                <p className="mt-1 text-[11px] text-ink-muted">Know your rights / Hindi & English</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={onClose} className="rounded-lg p-2 text-ink-muted md:hidden" aria-label="Close">
-                <X size={16} />
-              </button>
-            </div>
+            <button onClick={onClose} className="rounded-lg p-2 text-ink-muted md:hidden" aria-label="Close">
+              <X size={16} />
+            </button>
           </div>
 
-          {/* New chat */}
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={onNewChat}
@@ -88,7 +83,7 @@ export default function Sidebar({
               <li className="rounded-lg px-3 py-6 text-center text-sm text-ink-muted">
                 No conversations yet.
                 <br />
-                Ask your first question →
+                Ask your first question
               </li>
             )}
             <AnimatePresence initial={false}>
@@ -105,9 +100,7 @@ export default function Sidebar({
                     <button
                       onClick={() => onOpenThread(t.id)}
                       className={`group relative flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                        active
-                          ? "bg-brand-soft text-ink"
-                          : "text-ink-muted hover:bg-raised hover:text-ink"
+                        active ? "bg-brand-soft text-ink" : "text-ink-muted hover:bg-raised hover:text-ink"
                       }`}
                     >
                       {active && (
@@ -130,7 +123,6 @@ export default function Sidebar({
             </AnimatePresence>
           </ul>
 
-          {/* Footer */}
           <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
             <span className="text-[11px] text-ink-muted">Theme</span>
             <ThemeToggle />

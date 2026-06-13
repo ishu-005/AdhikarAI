@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Citation, Language, LiveSource, ChatMessage, ThreadSummary } from "./types";
+import type { Citation, Language, LiveSource, ChatMessage, QueryDiagnostics, ThreadSummary } from "./types";
 
 interface ChatState {
   threads: ThreadSummary[];
@@ -19,12 +19,14 @@ interface ChatState {
   addMessage: (m: ChatMessage) => void;
   appendToLast: (delta: string) => void;
   replaceLast: (full: string) => void;
+  updateLastMeta: (meta: ChatMessage["meta"]) => void;
   setStreaming: (s: boolean) => void;
   setInsights: (p: {
     contextNotice?: string;
     citations?: Citation[];
     liveSources?: LiveSource[];
     domain?: string;
+    diagnostics?: QueryDiagnostics;
   }) => void;
   upsertThread: (t: ThreadSummary) => void;
   removeThread: (id: string) => void;
@@ -58,6 +60,15 @@ export const useChat = create<ChatState>((set) => ({
       const messages = [...s.messages];
       const last = messages[messages.length - 1];
       if (last && last.role === "assistant") last.content = full;
+      return { messages };
+    }),
+  updateLastMeta: (meta) =>
+    set((s) => {
+      const messages = [...s.messages];
+      const last = messages[messages.length - 1];
+      if (last && last.role === "assistant") {
+        last.meta = { ...(last.meta || {}), ...(meta || {}) };
+      }
       return { messages };
     }),
   setStreaming: (streaming) => set({ streaming }),

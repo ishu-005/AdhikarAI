@@ -29,7 +29,7 @@ from backend.core.text import (
     normalize_domain,
     normalize_text,
 )
-from backend.core.chat_intelligence import rewrite_followup
+from backend.core.chat_intelligence import QueryPlan, plan_query
 from backend.ingest.pdf import ingest_pdf_bytes
 from backend.rag import pipeline
 
@@ -239,21 +239,25 @@ def _resolve_base(payload: QueryRequest) -> tuple[str, str, str]:
     return question, language, conversation_id
 
 
-def _prepare_query(payload: QueryRequest) -> tuple[str, str, str, str, str, list[dict], bool]:
+def _prepare_query(payload: QueryRequest) -> tuple[str, str, str, str, str, list[dict], QueryPlan]:
     original_question, language, conversation_id = _resolve_base(payload)
     history = chat_store.get_conversation(conversation_id)
-    rewrite = rewrite_followup(original_question, history, language)
-    if rewrite.rewritten:
+    plan = plan_query(original_question, history, language)
+    if plan.rewritten:
         metrics.incr("query_rewritten")
-    effective_question = rewrite.question
+    if not plan.needs_retrieval:
+        metrics.incr("query_no_retrieval")
+    effective_question = plan.question
     domain, _ = detect_domain(effective_question)
-    return original_question, effective_question, domain, language, conversation_id, history, rewrite.rewritten
+    if not plan.needs_retrieval:
+        domain = "general"
+    return original_question, effective_question, domain, language, conversation_id, history, plan
 
 
 @app.post("/api/query")
 async def query(payload: QueryRequest):
     metrics.incr("query_total")
-    original_question, question, domain, language, conversation_id, history, rewritten = _prepare_query(payload)
+    original_question, question, domain, language, conversation_id, history, plan = _prepare_query(payload)
     _, scores = detect_domain(question)
 
     cached = opt_cache.get(question, domain, language)
@@ -261,10 +265,10 @@ async def query(payload: QueryRequest):
         metrics.incr("cache_hit")
         result = cached
     else:
-        result = await _run_in_thread(question, domain, language, history)
+        result = await _run_in_thread(question, domain, language, history, plan)
         opt_cache.set(question, domain, language, result)
 
-    _append_chat_result(conversation_id, original_question, question, domain, language, result, rewritten)
+    _append_chat_result(conversation_id, original_question, question, domain, language, result, plan.rewritten)
     return {
         "conversation_id": conversation_id,
         "question": original_question,
@@ -273,21 +277,24 @@ async def query(payload: QueryRequest):
         "language": language,
         "domain_scores": scores,
         "_cached": bool(cached),
-        "_rewritten": rewritten,
+        "_rewritten": plan.rewritten,
+        "diagnostics": result.get("diagnostics", plan.diagnostics()),
         **result,
     }
 
 
-async def _run_in_thread(question: str, domain: str, language: str, history: list[dict]) -> dict:
+async def _run_in_thread(
+    question: str, domain: str, language: str, history: list[dict], plan: QueryPlan
+) -> dict:
     import anyio
 
-    return await anyio.to_thread.run_sync(pipeline.answer_query, question, domain, language, history)
+    return await anyio.to_thread.run_sync(pipeline.answer_query, question, domain, language, history, plan)
 
 
 @app.post("/api/query/stream")
 async def query_stream(payload: QueryRequest):
     metrics.incr("query_total")
-    original_question, question, domain, language, conversation_id, history, rewritten = _prepare_query(payload)
+    original_question, question, domain, language, conversation_id, history, plan = _prepare_query(payload)
     cached = opt_cache.get(question, domain, language)
 
     async def event_gen():
@@ -296,16 +303,22 @@ async def query_stream(payload: QueryRequest):
             metrics.incr("stream_cache_hit")
             for event in cached_stream_events(conversation_id, domain, language, cached):
                 yield event
-            _append_chat_result(conversation_id, original_question, question, domain, language, cached, rewritten)
+            _append_chat_result(conversation_id, original_question, question, domain, language, cached, plan.rewritten)
             return
 
         yield _sse(
             "meta",
-            {"conversation_id": conversation_id, "domain": domain, "language": language, "_rewritten": rewritten},
+            {
+                "conversation_id": conversation_id,
+                "domain": domain,
+                "language": language,
+                "_rewritten": plan.rewritten,
+                "diagnostics": plan.diagnostics(),
+            },
         )
         final: dict = {}
         try:
-            async for event in pipeline.astream_query(question, domain, language, history):
+            async for event in pipeline.astream_query(question, domain, language, history, plan):
                 if event["type"] == "token":
                     yield _sse("token", {"value": event["value"]})
                 elif event["type"] == "replace":
@@ -320,10 +333,11 @@ async def query_stream(payload: QueryRequest):
         answer = final.get("answer", "")
         if answer:
             result = {k: final.get(k) for k in (
-                "answer", "context_sources", "context_source_label", "context_notice", "citations", "live_sources"
+                "answer", "context_sources", "context_source_label", "context_notice", "citations", "live_sources",
+                "diagnostics"
             )}
             opt_cache.set(question, domain, language, result)
-            _append_chat_result(conversation_id, original_question, question, domain, language, result, rewritten)
+            _append_chat_result(conversation_id, original_question, question, domain, language, result, plan.rewritten)
 
     return StreamingResponse(event_gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -357,6 +371,7 @@ def _append_chat_result(
             "citations": result.get("citations", []),
             "live_sources": result.get("live_sources", []),
             "context_notice": result.get("context_notice", ""),
+            "diagnostics": result.get("diagnostics", {}),
         },
     )
 

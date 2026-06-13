@@ -61,14 +61,14 @@ export default function ChatColumn({
   }, [messages]);
 
   return (
-    <section className="glass relative flex flex-1 flex-col overflow-hidden rounded-xl2 border border-line shadow-soft">
-      <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+    <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl2 border border-line shadow-soft">
+      <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
         <div className="flex min-w-0 items-center gap-2">
           <button onClick={onToggleSidebar} className="rounded-lg p-2 text-ink-muted hover:bg-raised md:hidden">
             <Menu size={18} />
           </button>
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
+            <h2 className="flex items-center gap-2 font-display text-base font-semibold text-ink sm:text-lg">
               Legal Assistant
               <span className="hidden items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand sm:inline-flex">
                 <Sparkles size={10} /> cited answers
@@ -80,7 +80,7 @@ export default function ChatColumn({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <span className={`flex items-center gap-1.5 rounded-full bg-raised px-2.5 py-1 text-[11px] font-semibold ${st.text}`}>
             <span className="relative flex h-2 w-2">
               {health === "ok" && <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-emerald-400" />}
@@ -95,7 +95,7 @@ export default function ChatColumn({
             </span>
           )}
 
-          <div className="relative flex rounded-xl border border-line bg-raised p-0.5 text-xs font-semibold">
+          <div className="relative flex rounded-xl border border-line bg-raised p-0.5 text-[11px] font-semibold sm:text-xs">
             {(["en", "hi"] as const).map((l) => (
               <button
                 key={l}
@@ -129,25 +129,25 @@ export default function ChatColumn({
         </div>
       </header>
 
-      <div className="scroll-thin flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+      <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-3 sm:space-y-5 sm:p-6">
         {messages.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center text-center"
+            className="mx-auto flex min-h-full max-w-3xl flex-col items-center justify-start py-4 text-center sm:justify-center sm:py-6"
           >
-            <div className="mb-5 grid h-16 w-16 animate-float place-items-center rounded-3xl bg-brand-gradient shadow-glow">
-              <Scale size={30} className="text-white" />
+            <div className="mb-4 grid h-14 w-14 animate-float place-items-center rounded-2xl bg-brand-gradient shadow-glow sm:mb-5 sm:h-16 sm:w-16 sm:rounded-3xl">
+              <Scale size={26} className="text-white sm:h-[30px] sm:w-[30px]" />
             </div>
-            <h3 className="font-display text-2xl font-bold text-ink sm:text-3xl">
+            <h3 className="max-w-2xl font-display text-xl font-bold text-ink sm:text-3xl">
               Start with the facts. Get your <span className="gradient-text">rights</span> mapped.
             </h3>
             <p className="mt-3 max-w-xl text-sm text-ink-muted">
               Ask in English or Hindi. Short follow-ups like "retry", "explain more", or "in Hindi" now keep the same legal context.
             </p>
 
-            <div className="mt-5 flex max-w-2xl flex-wrap justify-center gap-2">
+            <div className="mt-4 flex max-w-2xl flex-wrap justify-center gap-2 sm:mt-5">
               {FACTS.map((fact) => (
                 <span
                   key={fact}
@@ -159,7 +159,7 @@ export default function ChatColumn({
               ))}
             </div>
 
-            <div className="mt-7 grid w-full gap-2.5 sm:grid-cols-2">
+            <div className="mt-5 grid w-full gap-2.5 sm:mt-7 sm:grid-cols-2">
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s.q}
