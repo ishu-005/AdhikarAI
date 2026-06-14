@@ -20,6 +20,7 @@ class QueryPlan:
     original_question: str
     query_type: str
     needs_retrieval: bool
+    answer_style: str = "actionable"
     rewritten: bool = False
     reason: str = ""
     issues: tuple[str, ...] = ()
@@ -30,6 +31,7 @@ class QueryPlan:
         return {
             "query_type": self.query_type,
             "needs_retrieval": self.needs_retrieval,
+            "answer_style": self.answer_style,
             "rewritten": self.rewritten,
             "reason": self.reason,
             "issues": list(self.issues),
@@ -112,6 +114,14 @@ _ISSUE_HINT = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_KNOWLEDGE_START = re.compile(
+    r"^(what are|what is|what rights|explain|tell me about|define|meaning of)\b",
+    re.IGNORECASE,
+)
+_CURATED_KNOWLEDGE = re.compile(
+    r"\b(basic rights|fundamental rights)\b",
+    re.IGNORECASE,
+)
 
 _CLARIFICATION_TOPICS = {
     "disability": ("disability_discrimination", "Disability discrimination by authority"),
@@ -146,6 +156,35 @@ def _is_smalltalk(value: str) -> bool:
     return text in _SMALLTALK or (
         len(text.split()) <= 4 and not is_interaction_command(text) and not _has_legal_signal(text)
     )
+
+
+def _is_legal_knowledge_query(value: str) -> bool:
+    text = _normalize(value)
+    if not _has_legal_signal(text):
+        return False
+    return bool(_KNOWLEDGE_START.search(text) or _CURATED_KNOWLEDGE.search(text))
+
+
+def _knowledge_needs_retrieval(value: str) -> bool:
+    text = _normalize(value)
+    return not bool(_CURATED_KNOWLEDGE.search(text))
+
+
+def _knowledge_domain_hint(value: str, detected_domain: str) -> str:
+    text = _normalize(value)
+    if _CURATED_KNOWLEDGE.search(text):
+        return "citizen_rights"
+    if re.search(r"\brti\b|right to information", text):
+        return "rti"
+    if re.search(r"consumer|refund|defect|product|service|warranty", text):
+        return "consumer"
+    if re.search(r"arrest|police|bail|fir|custody", text):
+        return "criminal_law"
+    if re.search(r"domestic violence|dowry|marriage|divorce|women|husband|wife", text):
+        return "women_family"
+    if re.search(r"labou?r|salary|wage|employee|employer", text):
+        return "labour"
+    return detected_domain if detected_domain != "general" else "citizen_rights"
 
 
 def split_legal_issues(question: str) -> tuple[str, ...]:
@@ -250,6 +289,7 @@ def plan_query(question: str, history: list[dict] | None, language: str) -> Quer
             original_question=original,
             query_type="smalltalk",
             needs_retrieval=False,
+            answer_style="chat",
             rewritten=rewrite.rewritten,
             reason="smalltalk_or_non_legal",
             domain_hint="general",
@@ -261,9 +301,23 @@ def plan_query(question: str, history: list[dict] | None, language: str) -> Quer
             original_question=original,
             query_type="smalltalk",
             needs_retrieval=False,
+            answer_style="chat",
             rewritten=rewrite.rewritten,
             reason="no_legal_signal",
             domain_hint="general",
+        )
+
+    if _is_legal_knowledge_query(effective):
+        return QueryPlan(
+            question=effective,
+            original_question=original,
+            query_type="legal_knowledge",
+            needs_retrieval=_knowledge_needs_retrieval(effective),
+            answer_style="educational",
+            rewritten=rewrite.rewritten,
+            reason="legal_knowledge",
+            issues=(),
+            domain_hint=_knowledge_domain_hint(effective, domain),
         )
 
     issues = split_legal_issues(effective)

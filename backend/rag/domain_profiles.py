@@ -71,15 +71,31 @@ _PROFILES: dict[str, tuple[_Aspect, ...]] = {
     "consumer": (
         _Aspect("defect", ("defect", "defective", "product", "warranty"), "defective goods warranty replacement refund"),
         _Aspect("service", ("service", "deficiency", "delay"), "deficiency in service compensation consumer complaint"),
-        _Aspect("complaint", ("refund", "complaint", "seller", "shop"), "consumer commission complaint refund replacement"),
+        _Aspect(
+            "complaint",
+            ("refund", "complaint", "seller", "shop", "consumer", "protection"),
+            "consumer protection act consumer rights consumer commission complaint refund replacement",
+        ),
     ),
     "labour": (
         _Aspect("wages", ("salary", "wage", "wages", "payment", "unpaid"), "wages salary non payment employer employee"),
-        _Aspect("employment", ("employee", "employer", "job", "termination"), "employment employer employee termination complaint"),
+        _Aspect(
+            "employment",
+            ("employee", "employer", "job", "termination", "terminated", "company", "notice"),
+            "employment employer employee termination notice complaint",
+        ),
         _Aspect("bonus_factory", ("factory", "bonus", "overtime"), "factory bonus overtime labour authority"),
     ),
     "criminal_law": (
         _Aspect("fir", ("fir", "police", "complaint", "refused"), "FIR police refusal complaint BNSS"),
+        _Aspect(
+            "arrest_rights",
+            ("grounds", "reason", "rights", "lawyer", "advocate", "family", "friend", "24 hours", "magistrate"),
+            (
+                "arrested person rights grounds of arrest right to lawyer advocate inform family friend "
+                "produced before Magistrate within 24 hours illegal detention medical examination BNSS Constitution"
+            ),
+        ),
         _Aspect("arrest_bail", ("arrest", "bail", "custody"), "arrest bail custody rights BNSS"),
         _Aspect("threat", ("threat", "threaten", "threatening", "intimidation"), "criminal intimidation threat alarm injury BNS"),
     ),
@@ -224,6 +240,13 @@ def classify_query_intent(question: str, domain: str) -> QueryIntent:
             ),
         )
     candidates = [a for a in aspects if a not in {"original", "procedure"}]
+    text = question.lower()
+    if profile.primary_domain == "criminal_law" and "arrest_rights" in candidates and re.search(
+        r"\b(right|rights|grounds|reason|lawyer|advocate|family|friend|24 hours|magistrate)\b", text
+    ):
+        return QueryIntent(profile.primary_domain, "arrest_rights", aspects, secondary_domains)
+    if profile.primary_domain == "criminal_law" and "arrest_bail" in candidates and re.search(r"\b(arrest|arrested|bail)\b", text):
+        return QueryIntent(profile.primary_domain, "arrest_bail", aspects, secondary_domains)
     intent = _prefer_intent(profile.primary_domain, candidates) if candidates else (
         aspects[1] if len(aspects) > 1 else "general"
     )
@@ -263,7 +286,7 @@ def _prefer_intent(domain: str, candidates: list[str]) -> str:
         "rti": ("appeal", "timeline", "application", "exemption"),
         "consumer": ("complaint", "defect", "service"),
         "labour": ("wages", "employment", "bonus_factory"),
-        "criminal_law": ("fir", "threat", "arrest_bail"),
+        "criminal_law": ("fir", "threat", "arrest_rights", "arrest_bail"),
         "property_finance": ("tenant", "registration", "land"),
         "human_rights": ("caste", "disability", "gender", "religion", "abuse"),
         "citizen_rights": ("legal_aid", "constitution"),
@@ -321,6 +344,14 @@ def rank_documents_for_intent(question: str, domain: str, docs: list[Any]) -> li
             value += _term_score(text, ("superintendent of police", "magistrate", "police complaint"), 5)
             if not _contains_any(question_text, ("witness", "threat", "threaten", "threatening", "intimidation")):
                 value -= _term_score(text, ("witness", "false evidence", "threatening any person", "intimidation"), 4)
+        elif intent.domain == "criminal_law" and intent.intent == "arrest_rights":
+            value += _term_score(text, ("grounds of arrest", "grounds for such arrest", "reason for arrest"), 6)
+            value += _term_score(text, ("lawyer", "advocate", "legal practitioner"), 5)
+            value += _term_score(text, ("friend", "relative", "family", "nominated person"), 4)
+            value += _term_score(text, ("twenty four hours", "24 hours", "magistrate"), 5)
+            value += _term_score(text, ("medical examination", "illegal detention"), 3)
+            if "bail" not in question_text:
+                value -= _term_score(text, ("bail", "court of session", "high court", "bond"), 3)
         elif intent.domain == "human_rights" and intent.intent == "religion":
             value += _term_score(text, ("religion", "religious", "minority", "minorities"), 4)
             value += _term_score(text, ("equality", "freedom of religion", "article 25", "article 26"), 3)

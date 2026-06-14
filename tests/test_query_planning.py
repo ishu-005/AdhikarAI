@@ -52,6 +52,22 @@ class QueryPlanningTests(unittest.TestCase):
         self.assertEqual(plan.query_type, "legal_single")
         self.assertEqual(plan.domain_hint, "women_family")
 
+    def test_basic_rights_routes_as_educational_knowledge_without_retrieval(self):
+        plan = plan_query("What are my basic rights?", [], "en")
+
+        self.assertEqual(plan.query_type, "legal_knowledge")
+        self.assertFalse(plan.needs_retrieval)
+        self.assertEqual(plan.domain_hint, "citizen_rights")
+        self.assertEqual(plan.answer_style, "educational")
+
+    def test_explain_rti_routes_as_retrieved_legal_knowledge(self):
+        plan = plan_query("Explain RTI Act", [], "en")
+
+        self.assertEqual(plan.query_type, "legal_knowledge")
+        self.assertTrue(plan.needs_retrieval)
+        self.assertEqual(plan.domain_hint, "rti")
+        self.assertEqual(plan.answer_style, "educational")
+
     def test_clarification_choice_is_saved_without_retrieval(self):
         history = [
             {"role": "user", "content": "Discrimination by authority"},

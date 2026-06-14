@@ -35,6 +35,17 @@ class ChatStoreTests(unittest.TestCase):
 
         self.assertEqual(chat_store.list_conversations()[0]["title"], "Urgent Arrest Help")
 
+    def test_conversations_are_scoped_by_owner(self):
+        owner_one_chat = chat_store.create_conversation(owner_id="browser-one")
+        owner_two_chat = chat_store.create_conversation(owner_id="browser-two")
+        chat_store.append_message(owner_one_chat, "user", "How do I file RTI?", {"domain": "rti"})
+        chat_store.append_message(owner_two_chat, "user", "Police refused FIR", {"domain": "criminal_law"})
+
+        owner_one_summaries = chat_store.list_conversations(owner_id="browser-one")
+
+        self.assertEqual([item["id"] for item in owner_one_summaries], [owner_one_chat])
+        self.assertEqual(len(chat_store.get_conversation(owner_two_chat, owner_id="browser-one")), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

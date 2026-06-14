@@ -32,6 +32,18 @@ class PipelineQueryPlanTests(unittest.TestCase):
         self.assertIn("ready", result["answer"].lower())
         self.assertNotIn("I will decide whether legal retrieval is needed", result["answer"])
 
+    def test_basic_rights_uses_educational_answer_without_problem_actions(self):
+        with patch("backend.rag.pipeline.retrieve") as retrieve:
+            result = answer_query("What are my basic rights?", "citizen_rights", "en", history=[])
+
+        retrieve.assert_not_called()
+        self.assertEqual(result["diagnostics"]["query_type"], "legal_knowledge")
+        self.assertEqual(result["diagnostics"]["answer_style"], "educational")
+        self.assertIn("Right to Equality", result["answer"])
+        self.assertIn("Right to Constitutional Remedies", result["answer"])
+        self.assertNotIn("Contact NHRC", result["answer"])
+        self.assertNotIn("Approach High Court", result["answer"])
+
     def test_domestic_threat_query_expands_for_retrieval(self):
         expanded = _expand_retrieval_query("my husband is threatning me", "women_family")
 

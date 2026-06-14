@@ -34,7 +34,18 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
         "criminal intimidation",
     ],
     "consumer": ["refund", "defect", "product", "service", "warranty", "consumer"],
-    "labour": ["salary", "wage", "employee", "employer", "factory", "labour", "bonus"],
+    "labour": [
+        "salary",
+        "wage",
+        "employee",
+        "employer",
+        "factory",
+        "labour",
+        "bonus",
+        "terminated",
+        "termination",
+        "company",
+    ],
     "rti": ["rti", "information", "public authority", "pio", "appeal"],
     "human_rights": [
         "rights",
@@ -81,10 +92,19 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
         "lawyer",
         "legal services",
     ],
-    "property_finance": ["property", "registration", "land", "acquisition", "instrument", "stamp"],
+    "property_finance": [
+        "property",
+        "registration",
+        "land",
+        "acquisition",
+        "instrument",
+        "stamp",
+        "rented",
+        "vacating",
+    ],
     "case_law": ["judgment", "judgement", "court", "supreme court", "case law", "precedent"],
     "legislation": ["amendment", "bill", "act rules", "legislative", "gazette"],
-    "grievance": ["grievance", "complaint portal", "public grievance", "pg portal"],
+    "grievance": ["grievance", "complaint portal", "public grievance", "pg portal", "municipal", "not resolving"],
 }
 
 DOMAIN_ALIASES: dict[str, str] = {

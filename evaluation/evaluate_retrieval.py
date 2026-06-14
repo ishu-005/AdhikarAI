@@ -47,6 +47,15 @@ def _doc_text(doc: Any) -> str:
     return " ".join(parts).lower()
 
 
+def _slug(value: str) -> str:
+    return "_".join("".join(ch.lower() if ch.isalnum() else " " for ch in value).split())
+
+
+def _matches_expected_source(text: str, expected: str) -> bool:
+    expected = expected.lower()
+    return expected in text or expected.replace("_", " ") in text or expected in _slug(text)
+
+
 def _planned_inspection(query: str, domain: str) -> dict:
     profile = build_domain_retrieval_plan(query, domain)
     return {
@@ -84,6 +93,7 @@ def _retrieve_case(query: str, domain: str) -> tuple[list[str], list[str], list[
 
 def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
     rows = []
+    route_hits = route_total = 0
     domain_hits = 0
     intent_hits = 0
     aspect_hits = aspect_total = 0
@@ -92,14 +102,23 @@ def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
     query_term_hits = query_term_total = 0
     retrieval_domain_hits = 0
     source_hits = source_total = 0
+    priority_counts: dict[str, int] = {}
+    actionable_total = 0
 
     for case in cases:
         query = str(case["query"])
+        priority = str(case.get("priority", "unspecified"))
+        expected_act = str(case.get("expected_act", ""))
+        expected_actionable = bool(case.get("expected_actionable", False))
+        priority_counts[priority] = priority_counts.get(priority, 0) + 1
+        if expected_actionable:
+            actionable_total += 1
         plan = plan_query(query, [], str(case.get("language", "en")))
         routed_domain = plan.domain_hint if plan.domain_hint != "general" else detect_domain(plan.question)[0]
         intent = classify_query_intent(plan.question, routed_domain)
 
         expected_domain = str(case.get("expected_domain", ""))
+        expected_route = str(case.get("expected_route", ""))
         expected_intent = str(case.get("expected_intent", ""))
         expected_aspects = list(case.get("expected_aspects", []))
         expected_secondary = list(case.get("expected_secondary_domains", []))
@@ -107,6 +126,7 @@ def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
         expected_query_terms = [str(s).lower() for s in case.get("expected_query_terms", [])]
         expected_needs_clarification = case.get("expected_needs_clarification")
 
+        route_ok = not expected_route or plan.query_type == expected_route
         domain_ok = intent.domain == expected_domain
         intent_ok = not expected_intent or intent.intent == expected_intent
         matched_aspects, total_aspects = _contains_all(list(intent.aspects), expected_aspects)
@@ -129,7 +149,10 @@ def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
             retrieved_domains, retrieved_texts, top_sources, top_sections = _retrieve_case(plan.question, intent.domain)
             inspection["top_sources"] = top_sources
             inspection["top_sections"] = top_sections
-            source_ok = all(any(expected in text for text in retrieved_texts) for expected in expected_sources)
+            source_ok = all(
+                any(_matches_expected_source(text, expected) for text in retrieved_texts)
+                for expected in expected_sources
+            )
             if intent.domain in retrieved_domains:
                 retrieval_domain_hits += 1
             if expected_sources:
@@ -137,6 +160,10 @@ def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
                 if source_ok:
                     source_hits += 1
 
+        if expected_route:
+            route_total += 1
+            if route_ok:
+                route_hits += 1
         if domain_ok:
             domain_hits += 1
         if intent_ok:
@@ -149,12 +176,18 @@ def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
         rows.append(
             {
                 "query": query,
+                "priority": priority,
+                "expected_route": expected_route,
+                "predicted_route": plan.query_type,
+                "route_ok": route_ok,
                 "expected_domain": expected_domain,
                 "predicted_domain": intent.domain,
                 "domain_ok": domain_ok,
                 "expected_intent": expected_intent,
                 "predicted_intent": intent.intent,
                 "intent_ok": intent_ok,
+                "expected_act": expected_act,
+                "expected_actionable": expected_actionable,
                 "expected_aspects": expected_aspects,
                 "predicted_aspects": list(intent.aspects),
                 "expected_secondary_domains": expected_secondary,
@@ -171,12 +204,15 @@ def evaluate_cases(cases: list[dict], run_retrieval: bool = False) -> dict:
     total = len(cases)
     result = {
         "total": total,
+        "route_accuracy": _ratio(route_hits, route_total),
         "domain_accuracy": _ratio(domain_hits, total),
         "intent_accuracy": _ratio(intent_hits, total),
         "aspect_recall": _ratio(aspect_hits, aspect_total),
         "secondary_domain_recall": _ratio(secondary_hits, secondary_total),
         "clarification_accuracy": _ratio(clarification_hits, clarification_total),
         "query_term_recall": _ratio(query_term_hits, query_term_total),
+        "priority_counts": priority_counts,
+        "actionable_case_count": actionable_total,
         "cases": rows,
     }
     if run_retrieval:
@@ -202,12 +238,15 @@ def main() -> int:
         return 0
 
     print(f"Cases: {result['total']}")
+    print(f"Route accuracy: {result['route_accuracy']:.2%}")
     print(f"Domain accuracy: {result['domain_accuracy']:.2%}")
     print(f"Intent accuracy: {result['intent_accuracy']:.2%}")
     print(f"Aspect recall: {result['aspect_recall']:.2%}")
     print(f"Secondary-domain recall: {result['secondary_domain_recall']:.2%}")
     print(f"Clarification accuracy: {result['clarification_accuracy']:.2%}")
     print(f"Query-term recall: {result['query_term_recall']:.2%}")
+    print(f"Priority counts: {result['priority_counts']}")
+    print(f"Actionable cases: {result['actionable_case_count']}")
     if args.with_retrieval:
         print(f"Retrieval-domain accuracy: {result['retrieval_domain_accuracy']:.2%}")
         print(f"Source recall: {result['source_recall']:.2%}")

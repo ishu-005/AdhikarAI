@@ -87,6 +87,11 @@ class RenameRequest(BaseModel):
     name: str
 
 
+def _owner_id(request: Request) -> str:
+    owner = (request.headers.get("X-AdhikarAI-Session") or "").strip()
+    return owner[:128] or "anonymous-browser"
+
+
 # ── Pages ──────────────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -138,33 +143,36 @@ async def domains():
 
 
 @app.get("/api/chats")
-async def list_chats():
-    return {"chats": chat_store.list_conversations()}
+async def list_chats(request: Request):
+    return {"chats": chat_store.list_conversations(owner_id=_owner_id(request))}
 
 
 # ── Chat management ────────────────────────────────────────────────────
 @app.post("/api/chat/new")
-async def new_chat():
-    return {"conversation_id": chat_store.create_conversation(), "messages": []}
+async def new_chat(request: Request):
+    return {"conversation_id": chat_store.create_conversation(owner_id=_owner_id(request)), "messages": []}
 
 
 @app.get("/api/chat/{conversation_id}")
-async def read_chat(conversation_id: str):
-    return {"conversation_id": conversation_id, "messages": chat_store.get_conversation(conversation_id)}
+async def read_chat(conversation_id: str, request: Request):
+    return {
+        "conversation_id": conversation_id,
+        "messages": chat_store.get_conversation(conversation_id, owner_id=_owner_id(request)),
+    }
 
 
 @app.delete("/api/chat/{conversation_id}")
-async def delete_chat(conversation_id: str):
-    chat_store.delete_conversation(conversation_id)
+async def delete_chat(conversation_id: str, request: Request):
+    chat_store.delete_conversation(conversation_id, owner_id=_owner_id(request))
     return {"status": "deleted", "conversation_id": conversation_id}
 
 
 @app.put("/api/chat/{conversation_id}/name")
-async def rename_chat(conversation_id: str, request: RenameRequest):
-    name = (request.name or "").strip()
+async def rename_chat(conversation_id: str, payload: RenameRequest, request: Request):
+    name = (payload.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name cannot be empty")
-    chat_store.rename_conversation(conversation_id, name)
+    chat_store.rename_conversation(conversation_id, name, owner_id=_owner_id(request))
     return {"status": "renamed", "conversation_id": conversation_id, "name": name}
 
 
@@ -183,7 +191,7 @@ async def pdf_status():
 
 
 # ── Query (sync + streaming) ───────────────────────────────────────────
-def _resolve_base(payload: QueryRequest) -> tuple[str, str, str]:
+def _resolve_base(payload: QueryRequest, owner_id: str) -> tuple[str, str, str]:
     question = normalize_text(payload.question)
     if not question:
         raise HTTPException(status_code=400, detail="question is required")
@@ -191,13 +199,17 @@ def _resolve_base(payload: QueryRequest) -> tuple[str, str, str]:
         raise HTTPException(status_code=400, detail="question exceeds max size")
     requested = (payload.language or "").strip().lower()
     language = requested if requested in {"en", "hi"} else detect_language(question)
-    conversation_id = normalize_text(payload.conversation_id or "") or chat_store.create_conversation()
+    requested_conversation = normalize_text(payload.conversation_id or "")
+    if requested_conversation and chat_store.conversation_belongs_to(requested_conversation, owner_id):
+        conversation_id = requested_conversation
+    else:
+        conversation_id = chat_store.create_conversation(owner_id=owner_id)
     return question, language, conversation_id
 
 
-def _prepare_query(payload: QueryRequest) -> tuple[str, str, str, str, str, list[dict], QueryPlan]:
-    original_question, language, conversation_id = _resolve_base(payload)
-    history = chat_store.get_conversation(conversation_id)
+def _prepare_query(payload: QueryRequest, owner_id: str) -> tuple[str, str, str, str, str, list[dict], QueryPlan]:
+    original_question, language, conversation_id = _resolve_base(payload, owner_id)
+    history = chat_store.get_conversation(conversation_id, owner_id=owner_id)
     plan = plan_query(original_question, history, language)
     if plan.rewritten:
         metrics.incr("query_rewritten")
@@ -211,20 +223,21 @@ def _prepare_query(payload: QueryRequest) -> tuple[str, str, str, str, str, list
 
 
 @app.post("/api/query")
-async def query(payload: QueryRequest):
+async def query(payload: QueryRequest, request: Request):
     metrics.incr("query_total")
-    original_question, question, domain, language, conversation_id, history, plan = _prepare_query(payload)
+    owner = _owner_id(request)
+    original_question, question, domain, language, conversation_id, history, plan = _prepare_query(payload, owner)
     _, scores = detect_domain(question)
 
-    cached = opt_cache.get(question, domain, language)
+    cached = opt_cache.get(question, domain, language, scope=conversation_id)
     if cached:
         metrics.incr("cache_hit")
         result = cached
     else:
         result = await _run_in_thread(question, domain, language, history, plan)
-        opt_cache.set(question, domain, language, result)
+        opt_cache.set(question, domain, language, result, scope=conversation_id)
 
-    _append_chat_result(conversation_id, original_question, question, domain, language, result, plan.rewritten)
+    _append_chat_result(conversation_id, original_question, question, domain, language, result, plan.rewritten, owner)
     return {
         "conversation_id": conversation_id,
         "question": original_question,
@@ -248,10 +261,11 @@ async def _run_in_thread(
 
 
 @app.post("/api/query/stream")
-async def query_stream(payload: QueryRequest):
+async def query_stream(payload: QueryRequest, request: Request):
     metrics.incr("query_total")
-    original_question, question, domain, language, conversation_id, history, plan = _prepare_query(payload)
-    cached = opt_cache.get(question, domain, language)
+    owner = _owner_id(request)
+    original_question, question, domain, language, conversation_id, history, plan = _prepare_query(payload, owner)
+    cached = opt_cache.get(question, domain, language, scope=conversation_id)
 
     async def event_gen():
         if cached:
@@ -259,7 +273,7 @@ async def query_stream(payload: QueryRequest):
             metrics.incr("stream_cache_hit")
             for event in cached_stream_events(conversation_id, domain, language, cached):
                 yield event
-            _append_chat_result(conversation_id, original_question, question, domain, language, cached, plan.rewritten)
+            _append_chat_result(conversation_id, original_question, question, domain, language, cached, plan.rewritten, owner)
             return
 
         yield _sse(
@@ -292,8 +306,8 @@ async def query_stream(payload: QueryRequest):
                 "answer", "context_sources", "context_source_label", "context_notice", "citations", "live_sources",
                 "diagnostics"
             )}
-            opt_cache.set(question, domain, language, result)
-            _append_chat_result(conversation_id, original_question, question, domain, language, result, plan.rewritten)
+            opt_cache.set(question, domain, language, result, scope=conversation_id)
+            _append_chat_result(conversation_id, original_question, question, domain, language, result, plan.rewritten, owner)
 
     return StreamingResponse(event_gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -310,12 +324,14 @@ def _append_chat_result(
     language: str,
     result: dict,
     rewritten: bool,
+    owner_id: str,
 ) -> None:
     chat_store.append_message(
         conversation_id,
         "user",
         original_question,
         {"language": language, "domain": domain, "effective_question": effective_question, "rewritten": rewritten},
+        owner_id=owner_id,
     )
     chat_store.append_message(
         conversation_id,
@@ -329,6 +345,7 @@ def _append_chat_result(
             "context_notice": result.get("context_notice", ""),
             "diagnostics": result.get("diagnostics", {}),
         },
+        owner_id=owner_id,
     )
 
 

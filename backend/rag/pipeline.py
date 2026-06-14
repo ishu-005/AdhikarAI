@@ -126,6 +126,7 @@ def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None 
         "live_block": format_live(live_chunks),
         "issue_block": _format_issue_block(issue_blocks),
         "history_block": "",  # filled by caller if history present
+        "response_format": _response_format(plan),
     }
     return {
         "docs": docs,
@@ -149,6 +150,24 @@ def _format_issue_block(issue_blocks: list[dict]) -> str:
         status = "sources found" if issue["retrieved"] else "no source found"
         lines.append(f"{index}. {issue['issue']} ({issue['domain']}, {status})")
     return "\n".join(lines)
+
+
+def _response_format(plan: QueryPlan | None) -> str:
+    if plan and plan.answer_style == "educational":
+        return (
+            "Format the response as:\n"
+            "1. Simple explanation: 2-4 short sentences explaining the concept or rights.\n"
+            "2. Key points: 4-6 bullets. Cite retrieved support using [1], [2], etc. when available; otherwise say source missing.\n"
+            "3. When this matters: 2-3 practical examples.\n"
+            "4. Source note: one short sentence naming any limits in the retrieved context.\n"
+            "Do not assume the user already has a dispute, complaint, or violation."
+        )
+    return (
+        "Format the response as:\n"
+        "1. Direct answer: 2-3 short sentences.\n"
+        "2. What you can do next: 3-5 bullets. Each bullet must either cite retrieved support using [1], [2], etc. or say \"source missing\".\n"
+        "3. Source note: one short sentence naming any limits in the retrieved context."
+    )
 
 
 def _diagnostics(
@@ -217,6 +236,16 @@ def _no_retrieval_payload(question: str, language: str, plan: QueryPlan) -> dict
             "live_sources": [],
             "diagnostics": _diagnostics(plan, [], []),
         }
+    if plan.query_type == "legal_knowledge" and plan.answer_style == "educational":
+        return {
+            "answer": _curated_knowledge_answer(question, language),
+            "context_sources": ["curated knowledge"],
+            "context_source_label": "curated knowledge",
+            "context_notice": "Educational overview; legal retrieval was not needed for this broad concept question.",
+            "citations": [],
+            "live_sources": [],
+            "diagnostics": _diagnostics(plan, [], []),
+        }
     return {
         "answer": _chat_only_answer(question, language),
         "context_sources": ["conversation"],
@@ -226,6 +255,34 @@ def _no_retrieval_payload(question: str, language: str, plan: QueryPlan) -> dict
         "live_sources": [],
         "diagnostics": _diagnostics(plan, [], []),
     }
+
+
+def _curated_knowledge_answer(question: str, language: str) -> str:
+    if language == "hi":
+        return (
+            "भारत में आपके basic rights में समानता, स्वतंत्रता, शोषण के खिलाफ सुरक्षा, धर्म की स्वतंत्रता, "
+            "सांस्कृतिक और शैक्षिक अधिकार, और संवैधानिक उपचार शामिल हैं.\n\n"
+            "Key points:\n"
+            "- Right to Equality: सरकार या public authority unfair discrimination नहीं कर सकती.\n"
+            "- Right to Freedom: speech, movement, association और personal liberty जैसे protections मिलते हैं.\n"
+            "- Right against Exploitation: forced labour और exploitation के खिलाफ protection है.\n"
+            "- Freedom of Religion: अपनी religion मानने और practice करने की स्वतंत्रता है.\n"
+            "- Cultural and Educational Rights: language, culture और education से जुड़े protections हैं.\n"
+            "- Constitutional Remedies: rights violate हों तो court में remedy मांग सकते हैं.\n\n"
+            "अगर यह किसी specific situation से जुड़ा है, जैसे police, job, landlord, family या consumer issue, तो facts बताइए."
+        )
+    return (
+        "Your basic rights in India include core constitutional protections that limit unfair treatment and abuse of power.\n\n"
+        "Key points:\n"
+        "- Right to Equality: protection against unfair discrimination by the State.\n"
+        "- Right to Freedom: protections for speech, movement, association, and personal liberty.\n"
+        "- Right against Exploitation: protection from forced labour and exploitation.\n"
+        "- Freedom of Religion: protection to profess, practice, and manage religious affairs within legal limits.\n"
+        "- Cultural and Educational Rights: protection for language, culture, and educational interests.\n"
+        "- Right to Constitutional Remedies: ability to approach courts when fundamental rights are violated.\n\n"
+        "When this matters: discrimination by officials, illegal arrest or detention, speech restrictions, religious discrimination, or misuse of public power.\n\n"
+        "If this relates to a specific situation, tell me what happened and I can give more focused guidance."
+    )
 
 
 def _clarification_answer(intent: QueryIntent) -> str:

@@ -13,11 +13,11 @@ class OptimizationCache:
         self._lock = Lock()
 
     @staticmethod
-    def _key(question: str, domain: str, language: str) -> str:
-        return hashlib.md5(f"{question.lower().strip()}|{domain}|{language}".encode()).hexdigest()
+    def _key(question: str, domain: str, language: str, scope: str = "") -> str:
+        return hashlib.md5(f"{scope}|{question.lower().strip()}|{domain}|{language}".encode()).hexdigest()
 
-    def get(self, question: str, domain: str, language: str) -> dict | None:
-        key = self._key(question, domain, language)
+    def get(self, question: str, domain: str, language: str, scope: str = "") -> dict | None:
+        key = self._key(question, domain, language, scope)
         with self._lock:
             entry = self._cache.get(key)
             if not entry:
@@ -28,6 +28,6 @@ class OptimizationCache:
             del self._cache[key]
         return None
 
-    def set(self, question: str, domain: str, language: str, value: dict) -> None:
+    def set(self, question: str, domain: str, language: str, value: dict, scope: str = "") -> None:
         with self._lock:
-            self._cache[self._key(question, domain, language)] = (value, datetime.now(UTC))
+            self._cache[self._key(question, domain, language, scope)] = (value, datetime.now(UTC))

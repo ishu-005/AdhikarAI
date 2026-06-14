@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, streamQuery } from "@/lib/api";
 import { makeThreadTitle } from "@/lib/chatActions.mjs";
 import { useChat } from "@/lib/store";
@@ -29,6 +29,7 @@ export default function ChatShell() {
   const [sources, setSources] = useState<DynamicSource[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const streamRunRef = useRef(0);
 
   useEffect(() => {
     api
@@ -40,10 +41,12 @@ export default function ChatShell() {
   }, [setThreads]);
 
   const startNewChat = useCallback(() => {
+    streamRunRef.current += 1;
+    setStreaming(false);
     setActive(null);
     setMessages([]);
     setInsights({ citations: [], liveSources: [], contextNotice: "", domain: "-" });
-  }, [setActive, setMessages, setInsights]);
+  }, [setActive, setMessages, setInsights, setStreaming]);
 
   const send = useCallback(
     async (question: string) => {
@@ -54,10 +57,13 @@ export default function ChatShell() {
       addMessage({ role: "assistant", content: "" });
       setStreaming(true);
 
+      const runId = ++streamRunRef.current;
+      const isCurrentRun = () => streamRunRef.current === runId;
       let convId = activeId ?? undefined;
       try {
         await streamQuery(q, language, convId, {
           onMeta: (m) => {
+            if (!isCurrentRun()) return;
             convId = m.conversation_id;
             setActive(m.conversation_id);
             setInsights({ domain: m.domain });
@@ -66,9 +72,14 @@ export default function ChatShell() {
               upsertThread({ id: m.conversation_id, title: makeThreadTitle(q) });
             }
           },
-          onToken: (t) => appendToLast(t),
-          onReplace: (full) => replaceLast(full),
+          onToken: (t) => {
+            if (isCurrentRun()) appendToLast(t);
+          },
+          onReplace: (full) => {
+            if (isCurrentRun()) replaceLast(full);
+          },
           onDone: (d) => {
+            if (!isCurrentRun()) return;
             if (d.answer) replaceLast(d.answer);
             setInsights({
               citations: d.citations ?? [],
@@ -82,12 +93,14 @@ export default function ChatShell() {
               diagnostics: d.diagnostics,
             });
           },
-          onError: (msg) => replaceLast(`Request failed: ${msg}`),
+          onError: (msg) => {
+            if (isCurrentRun()) replaceLast(`Request failed: ${msg}`);
+          },
         });
       } catch (e: any) {
-        replaceLast(`Request failed: ${e?.message ?? e}`);
+        if (isCurrentRun()) replaceLast(`Request failed: ${e?.message ?? e}`);
       } finally {
-        setStreaming(false);
+        if (isCurrentRun()) setStreaming(false);
       }
     },
     [
@@ -106,6 +119,8 @@ export default function ChatShell() {
 
   const openThread = useCallback(
     async (id: string) => {
+      streamRunRef.current += 1;
+      setStreaming(false);
       setActive(id);
       try {
         const data = await api.getChat(id);
@@ -130,7 +145,7 @@ export default function ChatShell() {
       }
       setSidebarOpen(false);
     },
-    [setActive, setMessages, setInsights]
+    [setActive, setMessages, setInsights, setStreaming]
   );
 
   return (

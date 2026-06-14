@@ -1,139 +1,394 @@
 [
   {
     "query": "My husband is threatening me",
+    "priority": "high",
     "expected_domain": "women_family",
     "expected_intent": "domestic_violence",
+    "expected_act": "Protection of Women from Domestic Violence Act, 2005",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
     "expected_secondary_domains": ["criminal_law"],
-    "expected_sources": ["domestic violence"]
+    "expected_sources": ["domestic_violence_act", "bns"]
   },
   {
     "query": "My husband is demanding dowry",
+    "priority": "high",
     "expected_domain": "women_family",
     "expected_intent": "dowry",
+    "expected_act": "Dowry Prohibition Act, 1961",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["dowry"]
+    "expected_sources": ["dowry_prohibition_act"]
+  },
+  {
+    "query": "I need maintenance after divorce",
+    "priority": "medium",
+    "expected_domain": "women_family",
+    "expected_intent": "marriage",
+    "expected_act": "Hindu Marriage Act, 1955",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["marriage_act"]
+  },
+  {
+    "query": "My in-laws are harassing me for dowry",
+    "priority": "high",
+    "expected_domain": "women_family",
+    "expected_intent": "dowry",
+    "expected_act": "Dowry Prohibition Act, 1961",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["dowry_prohibition_act"]
   },
   {
     "query": "PIO has not replied to my RTI application",
+    "priority": "high",
     "expected_domain": "rti",
     "expected_intent": "appeal",
+    "expected_act": "Right to Information Act, 2005",
+    "expected_actionable": true,
     "expected_aspects": ["timeline", "procedure"],
-    "expected_sources": ["rti"]
+    "expected_sources": ["rti_act"]
+  },
+  {
+    "query": "How do I file RTI?",
+    "priority": "high",
+    "expected_domain": "rti",
+    "expected_intent": "application",
+    "expected_act": "Right to Information Act, 2005",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["rti_act"]
+  },
+  {
+    "query": "My RTI request was denied citing exemption",
+    "priority": "medium",
+    "expected_domain": "rti",
+    "expected_intent": "appeal",
+    "expected_act": "Right to Information Act, 2005",
+    "expected_actionable": true,
+    "expected_aspects": ["exemption", "procedure"],
+    "expected_sources": ["rti_act"]
   },
   {
     "query": "Police refused to register my FIR",
+    "priority": "high",
     "expected_domain": "criminal_law",
     "expected_intent": "fir",
+    "expected_act": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
     "expected_query_terms": ["superintendent of police", "magistrate", "refusal to register fir"],
-    "expected_sources": ["fir"]
+    "expected_sources": ["bnss", "criminal_procedure"]
   },
   {
     "query": "Police refused FIR",
+    "priority": "high",
     "expected_domain": "criminal_law",
     "expected_intent": "fir",
+    "expected_act": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
     "expected_query_terms": ["superintendent of police", "magistrate", "refusal to register fir"],
-    "expected_sources": ["fir"]
+    "expected_sources": ["bnss", "criminal_procedure"]
   },
   {
     "query": "I was arrested and need bail",
+    "priority": "high",
     "expected_domain": "criminal_law",
     "expected_intent": "arrest_bail",
+    "expected_act": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["bail"]
+    "expected_sources": ["bnss", "criminal_procedure"]
+  },
+  {
+    "query": "Police arrested me without telling the reason",
+    "priority": "high",
+    "expected_domain": "criminal_law",
+    "expected_intent": "arrest_rights",
+    "expected_act": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["bnss", "criminal_procedure"]
+  },
+  {
+    "query": "Someone is threatening to hurt me",
+    "priority": "high",
+    "expected_domain": "criminal_law",
+    "expected_intent": "threat",
+    "expected_act": "Bharatiya Nyaya Sanhita, 2023",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["bns"]
   },
   {
     "query": "I received a defective product and want refund",
+    "priority": "high",
     "expected_domain": "consumer",
     "expected_intent": "complaint",
+    "expected_act": "Consumer Protection Act, 2019",
+    "expected_actionable": true,
     "expected_aspects": ["defect", "procedure"],
-    "expected_sources": ["consumer"]
+    "expected_sources": ["consumer_protection_act"]
+  },
+  {
+    "query": "Received defective product",
+    "priority": "medium",
+    "expected_domain": "consumer",
+    "expected_intent": "defect",
+    "expected_act": "Consumer Protection Act, 2019",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["consumer_protection_act"]
   },
   {
     "query": "The service provider delayed my service and refuses compensation",
+    "priority": "medium",
     "expected_domain": "consumer",
     "expected_intent": "service",
+    "expected_act": "Consumer Protection Act, 2019",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["consumer"]
+    "expected_sources": ["consumer_protection_act"]
+  },
+  {
+    "query": "Online seller refused refund for damaged goods",
+    "priority": "high",
+    "expected_domain": "consumer",
+    "expected_intent": "complaint",
+    "expected_act": "Consumer Protection Act, 2019",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["consumer_protection_act"]
   },
   {
     "query": "My employer has not paid salary",
+    "priority": "high",
     "expected_domain": "labour",
     "expected_intent": "wages",
+    "expected_act": "Payment of Wages Act, 1936",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["wages"]
+    "expected_sources": ["payment_of_wages_act"]
+  },
+  {
+    "query": "Company terminated me without notice",
+    "priority": "medium",
+    "expected_domain": "labour",
+    "expected_intent": "employment",
+    "expected_act": "Industrial Disputes Act, 1947",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["industrial_disputes_act"]
+  },
+  {
+    "query": "Factory is not paying overtime wages",
+    "priority": "medium",
+    "expected_domain": "labour",
+    "expected_intent": "wages",
+    "expected_act": "Factories Act, 1948",
+    "expected_actionable": true,
+    "expected_aspects": ["bonus_factory", "procedure"],
+    "expected_sources": ["factories_act", "payment_of_wages_act"]
   },
   {
     "query": "My landlord is refusing to return security deposit",
+    "priority": "medium",
     "expected_domain": "property_finance",
     "expected_intent": "tenant",
+    "expected_act": "State Rent Control / tenancy law",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["tenant"]
+    "expected_sources": ["tenancy_law", "rent_control"]
   },
   {
     "query": "Registrar refused to register my property deed",
+    "priority": "medium",
     "expected_domain": "property_finance",
     "expected_intent": "registration",
+    "expected_act": "Registration Act, 1908",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["registration"]
+    "expected_sources": ["registration_act"]
   },
   {
     "query": "Government acquired my land without proper compensation",
+    "priority": "medium",
     "expected_domain": "property_finance",
     "expected_intent": "land",
+    "expected_act": "Right to Fair Compensation and Transparency in Land Acquisition, Rehabilitation and Resettlement Act, 2013",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["land acquisition"]
+    "expected_sources": ["land_acquisition_act"]
+  },
+  {
+    "query": "Tenant is not vacating my rented house",
+    "priority": "low",
+    "expected_domain": "property_finance",
+    "expected_intent": "tenant",
+    "expected_act": "State Rent Control / tenancy law",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["tenancy_law", "rent_control"]
   },
   {
     "query": "Police abused me in custody",
+    "priority": "high",
     "expected_domain": "criminal_law",
     "expected_intent": "fir",
+    "expected_act": "Protection of Human Rights Act, 1993",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
     "expected_secondary_domains": ["human_rights"],
-    "expected_sources": ["human rights"]
+    "expected_sources": ["human_rights_act", "bnss"]
   },
   {
     "query": "I need free legal aid because I cannot afford a lawyer",
+    "priority": "medium",
     "expected_domain": "citizen_rights",
     "expected_intent": "legal_aid",
+    "expected_act": "Legal Services Authorities Act, 1987",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["legal services"]
+    "expected_sources": ["legal_services_authorities_act"]
+  },
+  {
+    "query": "What are my basic rights?",
+    "priority": "high",
+    "expected_route": "legal_knowledge",
+    "expected_domain": "citizen_rights",
+    "expected_intent": "constitution",
+    "expected_act": "Constitution of India",
+    "expected_actionable": false,
+    "expected_aspects": ["constitution"],
+    "expected_sources": ["constitution"]
+  },
+  {
+    "query": "What are fundamental rights?",
+    "priority": "high",
+    "expected_route": "legal_knowledge",
+    "expected_domain": "citizen_rights",
+    "expected_intent": "constitution",
+    "expected_act": "Constitution of India",
+    "expected_actionable": false,
+    "expected_aspects": ["constitution"],
+    "expected_sources": ["constitution"]
+  },
+  {
+    "query": "Explain RTI Act",
+    "priority": "medium",
+    "expected_route": "legal_knowledge",
+    "expected_domain": "rti",
+    "expected_intent": "application",
+    "expected_act": "Right to Information Act, 2005",
+    "expected_actionable": false,
+    "expected_aspects": ["application"],
+    "expected_sources": ["rti_act"]
+  },
+  {
+    "query": "What is consumer protection?",
+    "priority": "medium",
+    "expected_route": "legal_knowledge",
+    "expected_domain": "consumer",
+    "expected_intent": "complaint",
+    "expected_act": "Consumer Protection Act, 2019",
+    "expected_actionable": false,
+    "expected_aspects": ["complaint"],
+    "expected_sources": ["consumer_protection_act"]
+  },
+  {
+    "query": "What rights do I have if police arrest me?",
+    "priority": "high",
+    "expected_route": "legal_knowledge",
+    "expected_domain": "criminal_law",
+    "expected_intent": "arrest_rights",
+    "expected_act": "Bharatiya Nagarik Suraksha Sanhita, 2023",
+    "expected_actionable": false,
+    "expected_aspects": ["arrest_rights"],
+    "expected_query_terms": ["grounds of arrest", "lawyer", "family", "24 hours", "magistrate"],
+    "expected_sources": ["bnss", "criminal_procedure"]
   },
   {
     "query": "I faced disability discrimination",
+    "priority": "medium",
     "expected_domain": "human_rights",
     "expected_intent": "disability",
+    "expected_act": "Rights of Persons with Disabilities Act, 2016",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["disabilities"]
+    "expected_sources": ["rights_of_persons_with_disabilities_act"]
+  },
+  {
+    "query": "Caste discrimination by government officer",
+    "priority": "high",
+    "expected_domain": "human_rights",
+    "expected_intent": "caste",
+    "expected_act": "Protection of Human Rights Act, 1993",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["human_rights_act", "constitution"]
+  },
+  {
+    "query": "Police beat me in custody",
+    "priority": "high",
+    "expected_domain": "criminal_law",
+    "expected_intent": "fir",
+    "expected_act": "Protection of Human Rights Act, 1993",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_secondary_domains": ["human_rights"],
+    "expected_sources": ["human_rights_act", "bnss"]
   },
   {
     "query": "Discrimination by authority",
+    "priority": "high",
     "expected_domain": "human_rights",
     "expected_intent": "ambiguous_discrimination",
-    "expected_needs_clarification": true
+    "expected_act": "Depends on clarified discrimination type",
+    "expected_actionable": false,
+    "expected_needs_clarification": true,
+    "expected_sources": []
   },
   {
     "query": "Disability discrimination by public authority",
+    "priority": "medium",
     "expected_domain": "human_rights",
     "expected_intent": "disability",
+    "expected_act": "Rights of Persons with Disabilities Act, 2016",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["disabilities"]
+    "expected_sources": ["rights_of_persons_with_disabilities_act"]
   },
   {
     "query": "Religious discrimination by public authority",
+    "priority": "medium",
     "expected_domain": "human_rights",
     "expected_intent": "religion",
+    "expected_act": "Constitution of India",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
     "expected_query_terms": ["minority rights", "freedom of religion", "constitutional remedy"],
-    "expected_sources": ["religion"]
+    "expected_sources": ["constitution", "minority_rights"]
   },
   {
     "query": "How do I file a public grievance complaint",
+    "priority": "medium",
     "expected_domain": "grievance",
     "expected_intent": "complaint",
+    "expected_act": "Public grievance redressal mechanism",
+    "expected_actionable": true,
     "expected_aspects": ["procedure"],
-    "expected_sources": ["grievance"]
+    "expected_sources": ["public_grievance"]
+  },
+  {
+    "query": "Municipal office is not resolving my complaint",
+    "priority": "low",
+    "expected_domain": "grievance",
+    "expected_intent": "complaint",
+    "expected_act": "Public grievance redressal mechanism",
+    "expected_actionable": true,
+    "expected_aspects": ["procedure"],
+    "expected_sources": ["public_grievance"]
   }
 ]

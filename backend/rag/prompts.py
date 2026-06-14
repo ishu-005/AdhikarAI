@@ -29,10 +29,7 @@ Context ({context_notice}):
 
 {history_block}
 
-Format the response as:
-1. Direct answer: 2-3 short sentences.
-2. What you can do next: 3-5 bullets. Each bullet must either cite retrieved support using [1], [2], etc. or say "source missing".
-3. Source note: one short sentence naming any limits in the retrieved context.
+{response_format}
 
 For multi-issue questions, group by issue. Keep unsupported issues clearly marked instead of giving generic advice.
 Keep the answer compact. Do not repeat long disclaimers. General guidance only, not legal advice."""

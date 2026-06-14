@@ -9,10 +9,27 @@ import type {
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const SESSION_KEY = "adhikarai.browserSessionId";
+
+function getBrowserSessionId(): string {
+  if (typeof window === "undefined") return "server-render";
+  const existing = window.localStorage.getItem(SESSION_KEY);
+  if (existing) return existing;
+  const next =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  window.localStorage.setItem(SESSION_KEY, next);
+  return next;
+}
+
+function sessionHeaders(init?: HeadersInit): HeadersInit {
+  return { "X-AdhikarAI-Session": getBrowserSessionId(), ...(init || {}) };
+}
 
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    headers: { "Content-Type": "application/json", ...sessionHeaders(init?.headers) },
     ...init,
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -71,7 +88,7 @@ export async function streamQuery(
 ): Promise<void> {
   const res = await fetch(`${BASE}/api/query/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...sessionHeaders() },
     body: JSON.stringify({ question, language, conversation_id: conversationId }),
     signal,
   });

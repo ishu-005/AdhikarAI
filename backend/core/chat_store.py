@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from hashlib import sha256
 from threading import Lock
 
 from backend.core.chat_intelligence import make_chat_title
@@ -14,6 +15,27 @@ logger = get_logger("chat_store")
 _threads: dict[str, list[dict]] = {}
 _metadata: dict[str, dict] = {}
 _lock = Lock()
+_DEFAULT_OWNER = "default"
+
+
+def _owner_key(owner_id: str | None) -> str:
+    owner = (owner_id or _DEFAULT_OWNER).strip() or _DEFAULT_OWNER
+    return sha256(owner.encode("utf-8")).hexdigest()[:16]
+
+
+def _owner_key_from_conversation_id(conversation_id: str) -> str:
+    prefix = conversation_id.split("_", 1)[0]
+    if len(prefix) == 16 and all(ch in "0123456789abcdef" for ch in prefix):
+        return prefix
+    return _owner_key(_DEFAULT_OWNER)
+
+
+def _matches_owner(conversation_id: str, owner_id: str | None) -> bool:
+    if owner_id is None:
+        return True
+    expected = _owner_key(owner_id)
+    actual = _metadata.get(conversation_id, {}).get("owner_key") or _owner_key_from_conversation_id(conversation_id)
+    return actual == expected
 
 
 def load_all_from_supabase() -> int:
@@ -34,6 +56,7 @@ def load_all_from_supabase() -> int:
                 convo_id,
                 {
                     "id": convo_id,
+                    "owner_key": _owner_key_from_conversation_id(convo_id),
                     "title": _title_from_messages(messages),
                     "created_at": row.get("created_at"),
                     "updated_at": row.get("updated_at"),
@@ -44,7 +67,10 @@ def load_all_from_supabase() -> int:
         try:
             meta_resp = client.table("chat_metadata").select("id, name, created_at, updated_at").execute()
             for row in meta_resp.data or []:
-                existing = _metadata.setdefault(row["id"], {"id": row["id"]})
+                existing = _metadata.setdefault(
+                    row["id"],
+                    {"id": row["id"], "owner_key": _owner_key_from_conversation_id(row["id"])},
+                )
                 if row.get("name"):
                     existing["title"] = row["name"]
                 existing["created_at"] = row.get("created_at") or existing.get("created_at")
@@ -94,13 +120,15 @@ def _title_from_messages(messages: list[dict]) -> str:
     return "New Chat"
 
 
-def create_conversation() -> str:
-    convo_id = uuid.uuid4().hex
+def create_conversation(owner_id: str | None = None) -> str:
+    owner_key = _owner_key(owner_id)
+    convo_id = f"{owner_key}_{uuid.uuid4().hex}" if owner_id else uuid.uuid4().hex
     now = _now()
     with _lock:
         _threads[convo_id] = []
         _metadata[convo_id] = {
             "id": convo_id,
+            "owner_key": owner_key,
             "title": "New Chat",
             "created_at": now,
             "updated_at": now,
@@ -112,7 +140,23 @@ def create_conversation() -> str:
     return convo_id
 
 
-def append_message(conversation_id: str, role: str, content: str, meta: dict | None = None) -> None:
+def conversation_belongs_to(conversation_id: str, owner_id: str | None) -> bool:
+    with _lock:
+        if conversation_id not in _threads and conversation_id not in _metadata:
+            return False
+        return _matches_owner(conversation_id, owner_id)
+
+
+def append_message(
+    conversation_id: str,
+    role: str,
+    content: str,
+    meta: dict | None = None,
+    owner_id: str | None = None,
+) -> None:
+    if owner_id is not None and not conversation_belongs_to(conversation_id, owner_id):
+        logger.warning("Blocked cross-owner append to chat %s", conversation_id)
+        return
     msg_meta = meta or {}
     created_at = _now()
     message = {
@@ -127,6 +171,7 @@ def append_message(conversation_id: str, role: str, content: str, meta: dict | N
             conversation_id,
             {
                 "id": conversation_id,
+                "owner_key": _owner_key(owner_id),
                 "title": "New Chat",
                 "created_at": created_at,
                 "domain": "general",
@@ -145,13 +190,17 @@ def append_message(conversation_id: str, role: str, content: str, meta: dict | N
     _persist_metadata(conversation_id)
 
 
-def get_conversation(conversation_id: str) -> list[dict]:
+def get_conversation(conversation_id: str, owner_id: str | None = None) -> list[dict]:
     with _lock:
+        if not _matches_owner(conversation_id, owner_id):
+            return []
         return list(_threads.get(conversation_id, []))
 
 
-def delete_conversation(conversation_id: str) -> None:
+def delete_conversation(conversation_id: str, owner_id: str | None = None) -> None:
     with _lock:
+        if not _matches_owner(conversation_id, owner_id):
+            return
         _threads.pop(conversation_id, None)
         _metadata.pop(conversation_id, None)
     client = get_supabase_client()
@@ -162,8 +211,10 @@ def delete_conversation(conversation_id: str) -> None:
             logger.warning("Failed to delete chat %s: %s", conversation_id, exc)
 
 
-def rename_conversation(conversation_id: str, name: str) -> None:
+def rename_conversation(conversation_id: str, name: str, owner_id: str | None = None) -> None:
     with _lock:
+        if not _matches_owner(conversation_id, owner_id):
+            return
         meta = _metadata.setdefault(conversation_id, {"id": conversation_id, "created_at": _now()})
         meta["title"] = name
         meta["updated_at"] = _now()
@@ -175,10 +226,12 @@ def rename_conversation(conversation_id: str, name: str) -> None:
             logger.warning("Failed to rename chat %s: %s", conversation_id, exc)
 
 
-def list_conversations(limit: int = 50) -> list[dict]:
+def list_conversations(limit: int = 50, owner_id: str | None = None) -> list[dict]:
     with _lock:
         summaries = []
         for convo_id, messages in _threads.items():
+            if not _matches_owner(convo_id, owner_id):
+                continue
             meta = _metadata.get(convo_id, {})
             summaries.append(
                 {

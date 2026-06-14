@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from backend.core.cache import OptimizationCache
 from backend.core.sse import cached_stream_events, sse
 
 
@@ -27,6 +28,18 @@ class AppHelperTests(unittest.TestCase):
     def test_sse_preserves_unicode(self):
         frame = sse("token", {"value": "हिंदी"})
         self.assertIn("हिंदी", frame)
+
+
+    def test_optimization_cache_is_scoped_by_conversation(self):
+        cache = OptimizationCache()
+
+        cache.set("Police refused FIR", "criminal_law", "en", {"answer": "from chat one"}, scope="chat-1")
+
+        self.assertEqual(
+            cache.get("Police refused FIR", "criminal_law", "en", scope="chat-1")["answer"],
+            "from chat one",
+        )
+        self.assertIsNone(cache.get("Police refused FIR", "criminal_law", "en", scope="chat-2"))
 
 
 if __name__ == "__main__":
