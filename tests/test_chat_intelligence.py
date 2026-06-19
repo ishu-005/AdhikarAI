@@ -3,6 +3,7 @@ import unittest
 from backend.core.chat_intelligence import (
     latest_user_question,
     make_chat_title,
+    plan_query,
     rewrite_followup,
 )
 
@@ -48,6 +49,14 @@ class ChatIntelligenceTests(unittest.TestCase):
         result = rewrite_followup("How do I file a consumer complaint?", [], "en")
         self.assertFalse(result.rewritten)
         self.assertEqual(result.question, "How do I file a consumer complaint?")
+
+    def test_broad_legal_rights_is_curated_citizen_rights_knowledge(self):
+        plan = plan_query("What are my legal Rights", [], "en")
+
+        self.assertEqual(plan.query_type, "legal_knowledge")
+        self.assertEqual(plan.domain_hint, "citizen_rights")
+        self.assertEqual(plan.answer_style, "educational")
+        self.assertFalse(plan.needs_retrieval)
 
 
 if __name__ == "__main__":

@@ -67,7 +67,7 @@ def _retrieve_with_profile(question: str, domain: str) -> tuple[list, list[dict]
         docs = retrieve(item.query, item.domain, scoped=True)
         if not docs:
             metrics.incr("retrieval_empty")
-        groups.append(docs)
+        groups.append(rank_documents_for_intent(question, item.domain, docs))
         blocks.append(
             {
                 "query": item.query,
@@ -78,6 +78,74 @@ def _retrieve_with_profile(question: str, domain: str) -> tuple[list, list[dict]
         )
     docs = dedupe_ranked_documents(groups, profile.context_limit)
     return rank_documents_for_intent(question, domain, docs), blocks, profile.context_limit
+
+
+def _doc_score(doc) -> float | None:
+    metadata = getattr(doc, "metadata", None) or {}
+    score = metadata.get("similarity")
+    return float(score) if isinstance(score, (int, float)) else None
+
+
+def _needs_trusted_web_fallback(docs: list, support_block: str, domain: str) -> bool:
+    if domain == "general":
+        return False
+    if not docs:
+        return True
+    if _has_support_gap(support_block):
+        return True
+    scores = [score for doc in docs if (score := _doc_score(doc)) is not None]
+    return bool(scores and max(scores) < 0.62)
+
+
+def _has_support_gap(support_block: str) -> bool:
+    text = support_block.lower()
+    return (
+        "source missing" in text
+        or "retrieved sources do not provide further guidance" in text
+        or "retrieved legal sources do not provide additional guidance" in text
+    )
+
+
+def _source_confidence(
+    docs: list,
+    live_chunks: list[dict],
+    support_block: str,
+    used_web_fallback: bool,
+) -> dict:
+    scores = [score for doc in docs if (score := _doc_score(doc)) is not None]
+    max_score = max(scores) if scores else None
+    has_support_gap = _has_support_gap(support_block)
+    usable_live = [
+        item for item in live_chunks
+        if item.get("snippet") and not item.get("fetch_error")
+    ]
+
+    if used_web_fallback and usable_live:
+        level = "web_fallback"
+        label = "Trusted web fallback"
+        reason = "Database context was weak or missing, so configured trusted legal web sources were included."
+    elif docs and not has_support_gap and (max_score is None or max_score >= 0.78):
+        level = "strong"
+        label = "Strong source match"
+        reason = "Retrieved legal database context appears directly relevant."
+    elif docs:
+        level = "partial"
+        label = "Partial source match"
+        reason = "Some legal context was found, but exact procedural support may be incomplete."
+    else:
+        level = "missing"
+        label = "Source missing"
+        reason = "No matching legal database context or usable configured web source was found."
+
+    return {
+        "level": level,
+        "label": label,
+        "reason": reason,
+        "db_chunks": len(docs),
+        "live_sources": len(usable_live),
+        "max_score": round(max_score, 3) if max_score is not None else None,
+        "used_web_fallback": used_web_fallback,
+    }
 
 
 def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None = None) -> dict:
@@ -111,18 +179,27 @@ def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None 
         issue_blocks = []
     if not docs:
         metrics.incr("retrieval_empty")
-    live_chunks = live_fetch_for_domain(domain) if domain != "general" else []
+    query_intent = classify_query_intent(question, domain)
+    support_block = build_support_requirements(question, domain, docs)
+    used_web_fallback = _needs_trusted_web_fallback(docs, support_block, domain)
+    fallback_terms = [query_intent.intent.replace("_", " ")] + list(query_intent.aspects)
+    live_chunks = (
+        live_fetch_for_domain(domain, query=question, fallback_terms=fallback_terms)
+        if used_web_fallback
+        else []
+    )
 
     context_chunks, citations = build_citations(docs)
     sources, context_label, _ = context_source_label(context_chunks, live_chunks)
     notice = answer_scope_notice(language, sources, context_chunks, live_chunks)
+    source_confidence = _source_confidence(docs, live_chunks, support_block, used_web_fallback)
 
     prompt_vars = {
         "lang_inst": language_instruction(language),
         "question": question,
         "context": format_docs(docs, limit=context_limit),
         "context_notice": context_label,
-        "support_block": build_support_requirements(question, domain, docs),
+        "support_block": support_block,
         "live_block": format_live(live_chunks),
         "issue_block": _format_issue_block(issue_blocks),
         "history_block": "",  # filled by caller if history present
@@ -138,7 +215,14 @@ def _assemble(question: str, domain: str, language: str, plan: QueryPlan | None 
         "context_label": context_label,
         "context_notice": notice,
         "prompt_vars": prompt_vars,
-        "diagnostics": _diagnostics(plan, docs, issue_blocks, retrieval_blocks, classify_query_intent(question, domain)),
+        "diagnostics": _diagnostics(
+            plan,
+            docs,
+            issue_blocks,
+            retrieval_blocks,
+            query_intent,
+            source_confidence,
+        ),
     }
 
 
@@ -157,7 +241,7 @@ def _response_format(plan: QueryPlan | None) -> str:
         return (
             "Format the response as:\n"
             "1. Simple explanation: 2-4 short sentences explaining the concept or rights.\n"
-            "2. Key points: 4-6 bullets. Cite retrieved support using [1], [2], etc. when available; otherwise say source missing.\n"
+            "2. Key points: 4-6 bullets. Cite retrieved support using [1], [2], etc. when available; otherwise say \"The retrieved legal sources do not provide additional guidance on this point.\"\n"
             "3. When this matters: 2-3 practical examples.\n"
             "4. Source note: one short sentence naming any limits in the retrieved context.\n"
             "Do not assume the user already has a dispute, complaint, or violation."
@@ -165,7 +249,7 @@ def _response_format(plan: QueryPlan | None) -> str:
     return (
         "Format the response as:\n"
         "1. Direct answer: 2-3 short sentences.\n"
-        "2. What you can do next: 3-5 bullets. Each bullet must either cite retrieved support using [1], [2], etc. or say \"source missing\".\n"
+        "2. What you can do next: 3-5 bullets. Each bullet must either cite retrieved support using [1], [2], etc. or say \"The retrieved legal sources do not provide additional guidance on this point.\"\n"
         "3. Source note: one short sentence naming any limits in the retrieved context."
     )
 
@@ -176,6 +260,7 @@ def _diagnostics(
     issue_blocks: list[dict] | None = None,
     retrieval_blocks: list[dict] | None = None,
     query_intent=None,
+    source_confidence: dict | None = None,
 ) -> dict:
     base = plan.diagnostics() if plan else {}
     base.update(
@@ -184,6 +269,7 @@ def _diagnostics(
             "grounded_issue_count": sum(1 for item in issue_blocks or [] if item.get("retrieved", 0) > 0),
             "retrieval_queries": retrieval_blocks or [],
             "query_intent": query_intent.diagnostics() if query_intent else {},
+            "source_confidence": source_confidence or {},
         }
     )
     return base

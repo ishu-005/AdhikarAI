@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 
 from backend.rag.prompts import fallback_answer
 from backend.core.chat_intelligence import plan_query
-from backend.rag.pipeline import _assemble, _expand_retrieval_query, answer_query
+from backend.rag.pipeline import _assemble, _expand_retrieval_query, _retrieve_with_profile, answer_query
 
 
 class PipelineQueryPlanTests(unittest.TestCase):
@@ -129,14 +129,123 @@ class PipelineQueryPlanTests(unittest.TestCase):
 
         with (
             patch("backend.rag.pipeline.live_fetch_for_domain", return_value=[]),
-            patch("backend.rag.pipeline.retrieve", side_effect=[[witness_doc], [], []]),
+            patch("backend.rag.pipeline.retrieve", side_effect=[[witness_doc], [], [], [], []]),
         ):
             ctx = _assemble(question, "criminal_law", "en", plan)
 
         self.assertIn(
-            "source missing for exact FIR escalation procedure",
+            "retrieved legal sources do not provide additional guidance on the exact FIR escalation procedure",
             ctx["prompt_vars"]["support_block"],
         )
+        self.assertNotIn("source missing", ctx["prompt_vars"]["support_block"].lower())
+
+    def test_retrieval_profile_ranks_each_query_group_before_merging(self):
+        noise_1 = Document(page_content="Section 256 public servant record entry.", metadata={"source": "bns-1"})
+        noise_2 = Document(page_content="Section 284 summary trial by Magistrate of second class.", metadata={"source": "bnss-2"})
+        noise_3 = Document(page_content="Section 113 unrelated threat offence.", metadata={"source": "bns-3"})
+        noise_4 = Document(page_content="Section 175 unrelated election false statement.", metadata={"source": "bns-4"})
+        noise_5 = Document(page_content="Section 336 false document unrelated offence.", metadata={"source": "bns-5"})
+        section_38 = Document(
+            page_content="Section 38. Right of arrested person to meet an advocate during interrogation.",
+            metadata={"source": "bnss"},
+        )
+        section_47 = Document(
+            page_content="Section 47. Person arrested to be informed of grounds of arrest and right to bail.",
+            metadata={"source": "bnss"},
+        )
+        section_48 = Document(
+            page_content="Section 48. Obligation to inform relative or friend of the arrested person.",
+            metadata={"source": "bnss"},
+        )
+        section_58 = Document(
+            page_content="Section 58. Person arrested not to be detained more than twenty four hours before Magistrate.",
+            metadata={"source": "bnss"},
+        )
+        section_53 = Document(
+            page_content="Section 53. Examination of arrested person by medical officer.",
+            metadata={"source": "bnss"},
+        )
+
+        with patch(
+            "backend.rag.pipeline.retrieve",
+            side_effect=[
+                [noise_1, section_38],
+                [section_47],
+                [noise_2, section_48],
+                [noise_3, section_58],
+                [section_53],
+                [noise_4, noise_5],
+            ],
+        ):
+            docs, _blocks, _limit = _retrieve_with_profile("What are my rights if police arrest me?", "criminal_law")
+
+        joined = " ".join(doc.page_content.lower() for doc in docs)
+        self.assertIn("section 38", joined)
+        self.assertIn("section 47", joined)
+        self.assertIn("section 48", joined)
+        self.assertIn("section 58", joined)
+        self.assertIn("section 53", joined)
+        self.assertLess(joined.index("section 48"), joined.index("section 256"))
+
+    def test_response_format_uses_professional_missing_source_wording(self):
+        question = "Police refused FIR"
+        plan = plan_query(question, [], "en")
+
+        with (
+            patch("backend.rag.pipeline.live_fetch_for_domain", return_value=[]),
+            patch("backend.rag.pipeline.retrieve", side_effect=[[], [], [], [], []]),
+        ):
+            ctx = _assemble(question, "criminal_law", "en", plan)
+
+        self.assertIn("retrieved legal sources do not provide additional guidance on this point", ctx["prompt_vars"]["response_format"])
+        self.assertNotIn("source missing", ctx["prompt_vars"]["response_format"].lower())
+
+    def test_strong_database_context_skips_trusted_web_fallback(self):
+        question = "How do I file RTI?"
+        plan = plan_query(question, [], "en")
+        doc = Document(
+            page_content="Section 6 request for obtaining information through public information officer.",
+            metadata={
+                "domain": "rti",
+                "source": "rti_act",
+                "title": "Right to Information Act, 2005",
+                "similarity": 0.91,
+                "metadata": {"section": "Section 6", "act_name": "Right to Information Act, 2005"},
+            },
+        )
+
+        with (
+            patch("backend.rag.pipeline.live_fetch_for_domain", return_value=[]) as live_fetch,
+            patch("backend.rag.pipeline.retrieve", side_effect=[[doc], [doc], [doc]]),
+        ):
+            ctx = _assemble(question, "rti", "en", plan)
+
+        live_fetch.assert_not_called()
+        self.assertEqual(ctx["diagnostics"]["source_confidence"]["level"], "strong")
+        self.assertFalse(ctx["diagnostics"]["source_confidence"]["used_web_fallback"])
+
+    def test_missing_database_context_uses_trusted_web_fallback(self):
+        question = "Where can I file RTI online?"
+        plan = plan_query(question, [], "en")
+        live_source = {
+            "label": "RTI Filing Portal",
+            "url": "https://rtionline.gov.in",
+            "snippet": "Official RTI online filing portal.",
+            "trusted": True,
+        }
+
+        with (
+            patch("backend.rag.pipeline.live_fetch_for_domain", return_value=[live_source]) as live_fetch,
+            patch("backend.rag.pipeline.retrieve", side_effect=[[], [], []]),
+        ):
+            ctx = _assemble(question, "rti", "en", plan)
+
+        live_fetch.assert_called_once()
+        self.assertEqual(live_fetch.call_args.args[0], "rti")
+        self.assertEqual(live_fetch.call_args.kwargs["query"], question)
+        self.assertEqual(ctx["diagnostics"]["source_confidence"]["level"], "web_fallback")
+        self.assertTrue(ctx["diagnostics"]["source_confidence"]["used_web_fallback"])
+        self.assertEqual(ctx["live_chunks"], [live_source])
 
 
 if __name__ == "__main__":

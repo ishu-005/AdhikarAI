@@ -8,7 +8,8 @@ SYSTEM_PROMPT = (
     "You are AdhikarAI, a legal guidance assistant for Indian citizens. "
     "Answer only from the supplied legal context and live source snippets. Be direct, practical, and concise. "
     "Do not invent authorities, complaint forums, punishments, departments, or procedures that are not supported "
-    "by the provided material. If the context is weak or missing for an issue, say source missing for that issue. "
+    "by the provided material. If the context is weak or missing for an issue, say: "
+    "\"The retrieved legal sources do not provide additional guidance on this point.\" "
     "This is general guidance, not legal advice."
 )
 
@@ -84,7 +85,7 @@ def fallback_answer(
         )
         no_context = "I could not find exact matching legal context, so I cannot give source-backed next steps."
         tips = [
-            "Source missing: the retrieved legal material does not support a specific action for this issue.",
+            "The retrieved legal sources do not provide additional guidance on this point.",
             "Ask again with one issue at a time or mention the relevant law/document name if you know it.",
             "Keep facts, dates, and proof ready before using any legal remedy.",
         ]

@@ -15,9 +15,11 @@ class CitationTests(unittest.TestCase):
                     "domain": "citizen_rights",
                     "similarity": 0.87,
                     "metadata": {
+                        "act_name": "Right to Information Act, 2005",
                         "section": "Section 6: Request for obtaining information",
                         "filename": "RTI_Act_2005.pdf",
                         "chunk_index": 12,
+                        "url": "https://example.test/rti",
                     },
                 },
             )
@@ -31,6 +33,13 @@ class CitationTests(unittest.TestCase):
         self.assertEqual(citations[0]["title"], "Right To Information Act, 2005")
         self.assertEqual(citations[0]["chunk_index"], 12)
         self.assertEqual(citations[0]["score"], 0.87)
+        self.assertEqual(citations[0]["act_name"], "Right to Information Act, 2005")
+        self.assertEqual(
+            citations[0]["display"],
+            "Right to Information Act, 2005 - Section 6: Request for obtaining information",
+        )
+        self.assertEqual(citations[0]["url"], "https://example.test/rti")
+        self.assertEqual(citations[0]["snippet"], "Section text")
 
 
 if __name__ == "__main__":

@@ -41,6 +41,22 @@ class AppHelperTests(unittest.TestCase):
         )
         self.assertIsNone(cache.get("Police refused FIR", "criminal_law", "en", scope="chat-2"))
 
+    def test_optimization_cache_returns_defensive_copies(self):
+        cache = OptimizationCache()
+        cache.set(
+            "Police refused FIR",
+            "criminal_law",
+            "en",
+            {"answer": "original", "citations": [{"id": 1, "section": "A"}]},
+            scope="chat-1",
+        )
+
+        cached = cache.get("Police refused FIR", "criminal_law", "en", scope="chat-1")
+        cached["citations"][0]["section"] = "mutated"
+
+        fresh = cache.get("Police refused FIR", "criminal_law", "en", scope="chat-1")
+        self.assertEqual(fresh["citations"][0]["section"], "A")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,9 +34,9 @@ const SUGGESTIONS = [
 ];
 
 const FACTS = [
-  "RTI replies usually have a 30-day clock.",
-  "Arrested people can ask why they are being arrested.",
-  "Consumer complaints can be filed online for many disputes.",
+  "Knowledge questions get educational answers.",
+  "Problem questions get grounded next steps.",
+  "Citations show which legal chunks were used.",
 ];
 
 export default function ChatColumn({
@@ -61,27 +61,31 @@ export default function ChatColumn({
   }, [messages]);
 
   return (
-    <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl2 border border-line shadow-soft">
-      <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
+    <section className="glass relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl2 border border-line shadow-panel">
+      <header className="flex min-h-[68px] items-center justify-between gap-2 border-b border-line px-3 py-2.5 sm:gap-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <button onClick={onToggleSidebar} className="rounded-lg p-2 text-ink-muted hover:bg-raised md:hidden">
+          <button
+            onClick={onToggleSidebar}
+            className="grid h-9 w-9 place-items-center rounded-lg text-ink-muted transition hover:bg-raised hover:text-ink md:hidden"
+            aria-label="Open conversations"
+          >
             <Menu size={18} />
           </button>
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 font-display text-base font-semibold text-ink sm:text-lg">
-              Legal Assistant
-              <span className="hidden items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-medium text-brand sm:inline-flex">
+              AdhikarAI Counsel
+              <span className="hidden items-center gap-1 rounded-md bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand sm:inline-flex">
                 <Sparkles size={10} /> cited answers
               </span>
             </h2>
             <p className="truncate text-xs text-ink-muted">
-              {contextNotice || "Ask a rights question. Get a cited next step."}
+              {contextNotice || "Ask for legal knowledge or describe a real situation."}
             </p>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <span className={`flex items-center gap-1.5 rounded-full bg-raised px-2.5 py-1 text-[11px] font-semibold ${st.text}`}>
+          <span className={`flex h-8 items-center gap-1.5 rounded-lg border border-line bg-raised px-2.5 text-[11px] font-semibold ${st.text}`}>
             <span className="relative flex h-2 w-2">
               {health === "ok" && <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-emerald-400" />}
               <span className={`relative inline-flex h-2 w-2 rounded-full ${st.dot}`} />
@@ -90,12 +94,12 @@ export default function ChatColumn({
           </span>
 
           {domain && domain !== "-" && (
-            <span className="hidden rounded-full bg-raised px-2.5 py-1 text-[11px] text-ink-muted md:inline">
+            <span className="hidden h-8 items-center rounded-lg border border-line bg-raised px-2.5 text-[11px] font-medium text-ink-muted md:inline-flex">
               {domain.replace(/_/g, " ")}
             </span>
           )}
 
-          <div className="relative flex rounded-xl border border-line bg-raised p-0.5 text-[11px] font-semibold sm:text-xs">
+          <div className="relative flex rounded-lg border border-line bg-raised p-0.5 text-[11px] font-semibold sm:text-xs">
             {(["en", "hi"] as const).map((l) => (
               <button
                 key={l}
@@ -108,7 +112,7 @@ export default function ChatColumn({
                 {language === l && (
                   <motion.span
                     layoutId="lang-pill"
-                    className="absolute inset-0 -z-10 rounded-lg bg-brand-gradient"
+                    className="absolute inset-0 -z-10 rounded-md bg-brand-gradient"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -118,7 +122,7 @@ export default function ChatColumn({
 
           <button
             onClick={onToggleInsights}
-            className={`rounded-lg p-2 transition ${
+            className={`grid h-9 w-9 place-items-center rounded-lg transition ${
               insightsOpen ? "bg-brand-soft text-brand" : "text-ink-muted hover:bg-raised"
             }`}
             aria-label="Toggle evidence panel"
@@ -129,29 +133,29 @@ export default function ChatColumn({
         </div>
       </header>
 
-      <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-3 sm:space-y-5 sm:p-6">
+      <div className="scroll-thin flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:space-y-5 sm:px-6 sm:py-5">
         {messages.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="mx-auto flex min-h-full max-w-3xl flex-col items-center justify-start py-4 text-center sm:justify-center sm:py-6"
+            className="mx-auto flex min-h-full max-w-4xl flex-col items-center justify-start py-2 text-center sm:justify-center sm:py-6"
           >
-            <div className="mb-4 grid h-14 w-14 animate-float place-items-center rounded-2xl bg-brand-gradient shadow-glow sm:mb-5 sm:h-16 sm:w-16 sm:rounded-3xl">
+            <div className="mb-4 grid h-14 w-14 place-items-center rounded-xl bg-brand-gradient bg-[length:160%_160%] shadow-glow motion-safe:animate-gradient-x sm:mb-5 sm:h-16 sm:w-16">
               <Scale size={26} className="text-white sm:h-[30px] sm:w-[30px]" />
             </div>
-            <h3 className="max-w-2xl font-display text-xl font-bold text-ink sm:text-3xl">
-              Start with the facts. Get your <span className="gradient-text">rights</span> mapped.
+            <h3 className="max-w-2xl font-display text-2xl font-bold leading-tight text-ink sm:text-4xl">
+              Legal answers that separate <span className="gradient-text">knowledge</span> from action.
             </h3>
-            <p className="mt-3 max-w-xl text-sm text-ink-muted">
-              Ask in English or Hindi. Short follow-ups like "retry", "explain more", or "in Hindi" now keep the same legal context.
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted sm:text-[15px]">
+              Ask a broad rights question for a clean explanation, or describe what happened for grounded next steps with citations.
             </p>
 
-            <div className="mt-4 flex max-w-2xl flex-wrap justify-center gap-2 sm:mt-5">
+            <div className="mt-4 grid w-full max-w-3xl gap-2 sm:mt-5 sm:grid-cols-3">
               {FACTS.map((fact) => (
                 <span
                   key={fact}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-raised/70 px-3 py-1.5 text-xs text-ink-muted"
+                  className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg border border-line bg-raised/80 px-3 py-2 text-xs font-medium text-ink-muted"
                 >
                   <BadgeHelp size={13} className="text-accent" />
                   {fact}
@@ -159,7 +163,7 @@ export default function ChatColumn({
               ))}
             </div>
 
-            <div className="mt-5 grid w-full gap-2.5 sm:mt-7 sm:grid-cols-2">
+            <div className="mt-5 grid w-full gap-2.5 sm:mt-7 sm:grid-cols-2 xl:grid-cols-3">
               {SUGGESTIONS.map((s, i) => (
                 <motion.button
                   key={s.q}
@@ -167,8 +171,9 @@ export default function ChatColumn({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.05 }}
                   whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.985 }}
                   onClick={() => onSend(s.q)}
-                  className="group flex min-h-[78px] items-center gap-3 rounded-xl2 border border-line bg-panel/70 p-3 text-left text-sm text-ink transition hover:border-brand/40 hover:bg-panel hover:shadow-glow"
+                  className="group flex min-h-[88px] items-center gap-3 rounded-lg border border-line bg-panel/80 p-3 text-left text-sm text-ink transition hover:border-brand/50 hover:bg-panel hover:shadow-glow"
                 >
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand transition group-hover:scale-105">
                     <s.icon size={18} />

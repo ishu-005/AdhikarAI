@@ -36,8 +36,8 @@ export default function Composer({ onSend }: { onSend: (q: string) => void }) {
   };
 
   return (
-    <div className="border-t border-line bg-panel/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
-      <div className="group relative rounded-xl2 border border-line bg-raised transition focus-within:border-brand/50 focus-within:shadow-glow">
+    <div className="border-t border-line bg-panel/80 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4">
+      <div className="group relative rounded-xl2 border border-line bg-raised shadow-soft transition focus-within:border-brand/60 focus-within:shadow-glow">
         <textarea
           ref={ref}
           rows={1}
@@ -47,15 +47,15 @@ export default function Composer({ onSend }: { onSend: (q: string) => void }) {
             grow();
           }}
           onKeyDown={onKey}
-          placeholder="Describe the facts or ask a follow-up like retry, explain more, or in Hindi"
-          className="scroll-thin block max-h-[180px] w-full resize-none bg-transparent px-4 py-3 pr-14 text-[15px] text-ink outline-none placeholder:text-ink-muted/70"
+          placeholder="Ask a rights question or describe what happened..."
+          className="scroll-thin block max-h-[180px] min-h-[48px] w-full resize-none bg-transparent px-4 py-3 pr-14 text-[15px] leading-6 text-ink outline-none placeholder:text-ink-muted/70"
         />
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={submit}
           disabled={streaming || !value.trim()}
           aria-label="Send"
-          className="absolute bottom-2.5 right-2.5 grid h-9 w-9 place-items-center rounded-xl bg-brand-gradient text-white shadow-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          className="absolute bottom-2.5 right-2.5 grid h-9 w-9 place-items-center rounded-lg bg-brand-gradient text-white shadow-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
           {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </motion.button>
@@ -71,6 +71,7 @@ export default function Composer({ onSend }: { onSend: (q: string) => void }) {
           </kbd>
           newline
         </span>
+        <span className="sm:hidden">retry / explain more / in Hindi</span>
         <span className={value.length > MAX - 200 ? "text-amber-500" : ""}>
           {value.length}/{MAX}
         </span>

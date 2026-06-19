@@ -81,6 +81,61 @@ class _SupabaseFullTextRetriever(BaseRetriever):
         return [_row_to_doc(r) for r in (resp.data or [])]
 
 
+def _doc_identity(doc: Document) -> tuple[str, str, str]:
+    metadata = doc.metadata or {}
+    stored = metadata.get("metadata") if isinstance(metadata.get("metadata"), dict) else {}
+    source = str(stored.get("filename") or metadata.get("source") or "")
+    title = str(stored.get("title") or metadata.get("title") or "")
+    content = " ".join((doc.page_content or "").split())[:500]
+    return source, title, content
+
+
+def _fuse_documents(
+    vector_docs: list[Document],
+    fulltext_docs: list[Document],
+    *,
+    vector_weight: float,
+    fulltext_weight: float,
+) -> list[Document]:
+    """Merge vector and keyword results without depending on LangChain extras."""
+    scored: dict[tuple[str, str, str], tuple[float, int, Document]] = {}
+    sequence = 0
+    for docs, weight in ((vector_docs, vector_weight), (fulltext_docs, fulltext_weight)):
+        for rank, doc in enumerate(docs):
+            key = _doc_identity(doc)
+            # Reciprocal-rank fusion keeps keyword-only exact section hits visible
+            # even when their numeric rank field is missing or incomparable.
+            score = weight / (rank + 1)
+            if key in scored:
+                previous_score, first_seen, existing = scored[key]
+                scored[key] = (previous_score + score, first_seen, existing)
+            else:
+                scored[key] = (score, sequence, doc)
+                sequence += 1
+    return [item[2] for item in sorted(scored.values(), key=lambda item: (-item[0], item[1]))]
+
+
+class _HybridRetriever(BaseRetriever):
+    """Local vector + full-text retriever that works without optional LangChain modules."""
+
+    vector: BaseRetriever
+    fulltext: BaseRetriever
+    vector_weight: float = 0.6
+    fulltext_weight: float = 0.4
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        vector_docs = self.vector.invoke(query)
+        fulltext_docs = self.fulltext.invoke(query)
+        return _fuse_documents(
+            vector_docs,
+            fulltext_docs,
+            vector_weight=self.vector_weight,
+            fulltext_weight=self.fulltext_weight,
+        )
+
+
 @lru_cache
 def _get_reranker():
     settings = get_settings()
@@ -113,17 +168,13 @@ def build_retriever(domain: str, scoped: bool = False) -> BaseRetriever:
     base: BaseRetriever = vector
 
     if settings.hybrid_enabled:
-        try:
-            from langchain.retrievers import EnsembleRetriever
-
-            fulltext = _SupabaseFullTextRetriever(domain=search_domain, match_count=pool)
-            base = EnsembleRetriever(
-                retrievers=[vector, fulltext],
-                weights=[settings.vector_weight, settings.fulltext_weight],
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Ensemble retriever unavailable (%s); using vector only.", exc)
-            base = vector
+        fulltext = _SupabaseFullTextRetriever(domain=search_domain, match_count=pool)
+        base = _HybridRetriever(
+            vector=vector,
+            fulltext=fulltext,
+            vector_weight=settings.vector_weight,
+            fulltext_weight=settings.fulltext_weight,
+        )
 
     reranker = _get_reranker()
     if reranker is not None:

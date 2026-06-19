@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import { api, streamQuery } from "@/lib/api";
 import { makeThreadTitle } from "@/lib/chatActions.mjs";
 import { useChat } from "@/lib/store";
@@ -149,7 +150,7 @@ export default function ChatShell() {
   );
 
   return (
-    <main className="mx-auto flex h-[100dvh] max-w-[1600px] gap-2 overflow-hidden p-2 sm:gap-3 sm:p-3">
+    <main className="mx-auto flex h-[100dvh] max-w-[1680px] gap-2 overflow-hidden p-2 sm:gap-3 lg:p-4">
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -163,7 +164,9 @@ export default function ChatShell() {
         onToggleInsights={() => setInsightsOpen((v) => !v)}
         insightsOpen={insightsOpen}
       />
-      {insightsOpen && <InsightsPanel sources={sources} onClose={() => setInsightsOpen(false)} />}
+      <AnimatePresence>
+        {insightsOpen && <InsightsPanel sources={sources} onClose={() => setInsightsOpen(false)} />}
+      </AnimatePresence>
     </main>
   );
 }

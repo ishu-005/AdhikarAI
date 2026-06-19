@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 
@@ -24,10 +25,10 @@ class OptimizationCache:
                 return None
             value, ts = entry
             if datetime.now(UTC) - ts < timedelta(seconds=self._ttl):
-                return value
+                return deepcopy(value)
             del self._cache[key]
         return None
 
     def set(self, question: str, domain: str, language: str, value: dict, scope: str = "") -> None:
         with self._lock:
-            self._cache[self._key(question, domain, language, scope)] = (value, datetime.now(UTC))
+            self._cache[self._key(question, domain, language, scope)] = (deepcopy(value), datetime.now(UTC))

@@ -119,7 +119,7 @@ _KNOWLEDGE_START = re.compile(
     re.IGNORECASE,
 )
 _CURATED_KNOWLEDGE = re.compile(
-    r"\b(basic rights|fundamental rights)\b",
+    r"\b(basic rights|fundamental rights|legal rights)\b|^what are my rights\??$",
     re.IGNORECASE,
 )
 

@@ -4,25 +4,47 @@ export interface Citation {
   id: number;
   section: string;
   source: string;
+  title?: string;
+  act_name?: string;
+  display?: string;
   domain: string;
   score: number | null;
+  chunk_index?: number | null;
+  url?: string;
+  snippet?: string;
 }
 
 export interface LiveSource {
   label: string;
   url: string;
   snippet: string;
+  trusted?: boolean;
+  official?: boolean;
+  source_type?: string;
+  fetch_error?: boolean;
+}
+
+export interface SourceConfidence {
+  level?: "strong" | "partial" | "web_fallback" | "missing" | string;
+  label?: string;
+  reason?: string;
+  db_chunks?: number;
+  live_sources?: number;
+  max_score?: number | null;
+  used_web_fallback?: boolean;
 }
 
 export interface QueryDiagnostics {
   query_type?: string;
   needs_retrieval?: boolean;
+  answer_style?: string;
   rewritten?: boolean;
   reason?: string;
   issues?: string[];
   domain_hint?: string;
   retrieval_count?: number;
   grounded_issue_count?: number;
+  source_confidence?: SourceConfidence;
 }
 
 export interface ChatMessage {

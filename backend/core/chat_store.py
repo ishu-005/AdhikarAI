@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
 from datetime import UTC, datetime
 from hashlib import sha256
 from threading import Lock
@@ -50,7 +51,7 @@ def load_all_from_supabase() -> int:
     with _lock:
         for row in resp.data or []:
             convo_id = row["id"]
-            messages = row.get("messages", []) or []
+            messages = deepcopy(row.get("messages", []) or [])
             _threads[convo_id] = messages
             _metadata.setdefault(
                 convo_id,
@@ -185,7 +186,7 @@ def append_message(
             current["language"] = msg_meta["language"]
         if role == "user" and current.get("title") in {"", "New Chat", None}:
             current["title"] = make_chat_title(content)
-        messages = list(_threads[conversation_id])
+        messages = deepcopy(_threads[conversation_id])
     _persist(conversation_id, messages)
     _persist_metadata(conversation_id)
 
@@ -194,7 +195,7 @@ def get_conversation(conversation_id: str, owner_id: str | None = None) -> list[
     with _lock:
         if not _matches_owner(conversation_id, owner_id):
             return []
-        return list(_threads.get(conversation_id, []))
+        return deepcopy(_threads.get(conversation_id, []))
 
 
 def delete_conversation(conversation_id: str, owner_id: str | None = None) -> None:

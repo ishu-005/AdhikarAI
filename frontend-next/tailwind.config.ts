@@ -25,14 +25,15 @@ const config: Config = {
         display: ["var(--font-display)", "system-ui", "sans-serif"],
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
       },
-      borderRadius: { xl2: "1.25rem", xl3: "1.75rem" },
+      borderRadius: { xl2: "0.875rem", xl3: "1.125rem" },
       boxShadow: {
-        glow: "0 0 0 1px rgb(var(--brand) / 0.15), 0 8px 30px -8px rgb(var(--brand) / 0.35)",
-        soft: "0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.18)",
-        panel: "0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 40px -20px rgb(0 0 0 / 0.45)",
+        glow: "0 0 0 1px rgb(var(--brand) / 0.18), 0 10px 28px -14px rgb(var(--brand) / 0.55)",
+        soft: "0 1px 2px rgb(0 0 0 / 0.05), 0 10px 24px -18px rgb(0 0 0 / 0.30)",
+        panel: "0 1px 0 rgb(255 255 255 / 0.04) inset, 0 16px 44px -28px rgb(0 0 0 / 0.50)",
       },
       backgroundImage: {
         "brand-gradient": "linear-gradient(135deg, rgb(var(--brand)) 0%, rgb(var(--brand-2)) 100%)",
+        "signal-gradient": "linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--brand)) 100%)",
       },
       keyframes: {
         "fade-up": {

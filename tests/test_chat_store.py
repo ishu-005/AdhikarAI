@@ -46,6 +46,16 @@ class ChatStoreTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in owner_one_summaries], [owner_one_chat])
         self.assertEqual(len(chat_store.get_conversation(owner_two_chat, owner_id="browser-one")), 0)
 
+    def test_get_conversation_returns_defensive_message_copies(self):
+        convo_id = chat_store.create_conversation(owner_id="browser-one")
+        chat_store.append_message(convo_id, "user", "Police refused FIR", {"domain": "criminal_law"})
+
+        messages = chat_store.get_conversation(convo_id, owner_id="browser-one")
+        messages[0]["meta"]["domain"] = "mutated"
+
+        fresh = chat_store.get_conversation(convo_id, owner_id="browser-one")
+        self.assertEqual(fresh[0]["meta"]["domain"], "criminal_law")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -39,6 +39,11 @@ dynamic_sources:
     domain: "criminal_law"
     refresh_days: 30
 
+  - url: "https://www.mha.gov.in/sites/default/files/250884_2_english_01042024.pdf"
+    label: "BNSS 2023 - Ministry of Home Affairs PDF"
+    domain: "criminal_law"
+    refresh_days: 30
+
   - url: "https://legislative.gov.in/acts-rules"
     label: "Ministry of Law — Acts Index"
     domain: "legislation"

@@ -149,6 +149,8 @@ def detect_language(question: str) -> str:
 def detect_domain(question: str) -> tuple[str, dict[str, int]]:
     q = question.lower()
     scores = {domain: sum(1 for w in words if w in q) for domain, words in DOMAIN_KEYWORDS.items()}
+    if re.search(r"\b(custody|custodial|detention)\b", q) and re.search(r"\b(beat|beaten|abuse|abused|torture|violence)\b", q):
+        return "human_rights", scores
     best = max(scores, key=scores.get)
     if scores[best] == 0:
         best = "general"
@@ -179,11 +181,11 @@ def language_instruction(language: str) -> str:
     if language == "hi":
         return (
             "Reply in simple Hindi. If the retrieved context does not directly support the "
-            "answer, say source missing for that issue instead of using outside knowledge."
+            "answer, say the retrieved legal sources do not provide additional guidance on that point instead of using outside knowledge."
         )
     return (
         "Reply in simple English. If the retrieved context does not directly support the "
-        "answer, say source missing for that issue instead of using outside knowledge."
+        "answer, say the retrieved legal sources do not provide additional guidance on that point instead of using outside knowledge."
     )
 
 

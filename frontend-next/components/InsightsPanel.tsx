@@ -22,7 +22,7 @@ function Section({
     <section className="border-b border-line">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-ink transition hover:bg-raised/50"
+        className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-ink transition hover:bg-raised/60"
       >
         <span className="flex items-center gap-2">
           <span className="text-brand">{icon}</span>
@@ -64,11 +64,17 @@ export default function InsightsPanel({
   const { citations, liveSources } = useChat();
 
   return (
-    <aside className="glass fixed inset-x-2 bottom-2 top-2 z-40 flex flex-col overflow-hidden rounded-xl2 border border-line shadow-soft sm:inset-x-auto sm:right-3 sm:w-80 lg:static lg:z-auto">
+    <motion.aside
+      initial={{ opacity: 0, x: 24 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 24 }}
+      transition={{ duration: 0.22, ease: [0.21, 1.02, 0.73, 1] }}
+      className="glass fixed inset-x-2 bottom-2 top-2 z-40 flex flex-col overflow-hidden rounded-xl2 border border-line shadow-panel sm:inset-x-auto sm:right-3 sm:w-80 lg:static lg:z-auto lg:w-[21rem]"
+    >
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
-          <h2 className="font-display text-base font-semibold text-ink">Insight Box</h2>
-          <p className="text-xs text-ink-muted">Citations and source status</p>
+          <h2 className="font-display text-base font-semibold text-ink">Evidence</h2>
+          <p className="text-xs text-ink-muted">Citations, live checks, source state</p>
         </div>
         <button onClick={onClose} className="rounded-lg p-1.5 text-ink-muted hover:bg-raised" aria-label="Hide">
           <X size={16} />
@@ -78,7 +84,7 @@ export default function InsightsPanel({
       <div className="scroll-thin flex-1 overflow-y-auto">
         <Section title="Citations" icon={<BookMarked size={15} />} count={citations.length}>
           {citations.length === 0 ? (
-            <p className="rounded-lg bg-raised/60 px-3 py-4 text-center text-sm text-ink-muted">
+            <p className="rounded-lg border border-dashed border-line bg-raised/60 px-3 py-4 text-center text-sm text-ink-muted">
               Citations from the bare acts will appear here.
             </p>
           ) : (
@@ -89,20 +95,34 @@ export default function InsightsPanel({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="rounded-xl border border-line bg-raised/70 p-3 text-sm transition hover:border-brand/40"
+                  className="rounded-lg border border-line bg-raised/70 p-3 text-sm transition hover:border-brand/50"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium leading-snug text-ink">
-                      <span className="text-brand">[{c.id}]</span> {c.section}
+                      <span className="text-brand">[{c.id}]</span> {c.display || c.section}
                     </span>
                   </div>
-                  <p className="mt-1 truncate text-xs text-ink-muted">{c.source}</p>
+                  <p className="mt-1 truncate text-xs text-ink-muted">
+                    {c.act_name || c.title || c.source}
+                  </p>
+                  {c.snippet && <p className="mt-2 line-clamp-3 text-xs leading-5 text-ink-muted">{c.snippet}</p>}
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="inline-block rounded-md bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                    <span className="inline-block min-w-0 truncate rounded-md bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand">
                       {(c.domain || "general").replace(/_/g, " ")}
                     </span>
-                    {c.score != null && (
-                      <span className="flex items-center gap-1.5">
+                    <span className="flex shrink-0 items-center gap-2">
+                      {c.url && (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-md border border-line bg-panel px-1.5 py-0.5 text-[10px] text-brand hover:underline"
+                        >
+                          Source <ExternalLink size={10} />
+                        </a>
+                      )}
+                      {c.score != null && (
+                        <span className="flex items-center gap-1.5">
                         <span className="h-1.5 w-12 overflow-hidden rounded-full bg-line">
                           <span
                             className="block h-full rounded-full bg-brand-gradient"
@@ -111,7 +131,8 @@ export default function InsightsPanel({
                         </span>
                         <span className="text-[10px] tabular-nums text-ink-muted">{c.score}</span>
                       </span>
-                    )}
+                      )}
+                    </span>
                   </div>
                 </motion.li>
               ))}
@@ -121,13 +142,13 @@ export default function InsightsPanel({
 
         <Section title="Live web sources" icon={<Globe size={15} />} count={liveSources.length}>
           {liveSources.length === 0 ? (
-            <p className="rounded-lg bg-raised/60 px-3 py-4 text-center text-sm text-ink-muted">
-              No live sources fetched for this query.
+            <p className="rounded-lg border border-dashed border-line bg-raised/60 px-3 py-4 text-center text-sm text-ink-muted">
+              No live source configured or fetched for this domain.
             </p>
           ) : (
             <ul className="space-y-2">
               {liveSources.map((s, i) => (
-                <li key={i} className="rounded-xl border border-line bg-raised/70 p-3 text-sm">
+                <li key={i} className="rounded-lg border border-line bg-raised/70 p-3 text-sm">
                   <a href={s.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 font-medium text-brand hover:underline">
                     {s.label} <ExternalLink size={12} />
                   </a>
@@ -141,7 +162,7 @@ export default function InsightsPanel({
         <Section title="Configured sources" icon={<FileText size={15} />} count={sources.length}>
           <ul className="space-y-1.5">
             {sources.map((s, i) => (
-              <li key={i} className="flex items-center justify-between gap-2 text-sm">
+              <li key={i} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-raised/50 px-2.5 py-2 text-sm">
                 <a href={s.url} target="_blank" rel="noreferrer" className="truncate text-ink-muted hover:text-brand">
                   {s.label}
                 </a>
@@ -158,6 +179,6 @@ export default function InsightsPanel({
         </Section>
 
       </div>
-    </aside>
+    </motion.aside>
   );
 }
